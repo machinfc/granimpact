@@ -85,7 +85,7 @@ def cmd_sweep(args) -> int:
             writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
             writer.writeheader()
             writer.writerows(rows)
-        print(f"\ntabla escrita en {out}")
+        print(f"\ntable written to {out}")
     if args.plot:
         from .plots import plot_sweep
 

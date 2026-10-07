@@ -58,7 +58,7 @@ def fit_power_law(energies: Sequence[float], diameters: Sequence[float]) -> dict
         "n": n,
         "a": a,
         "b": b,
-        "b_esperado_uehara": 0.25,
+        "b_expected_uehara": 0.25,
         "R2": _r_squared(diameters, predicted),
     }
 

@@ -43,7 +43,7 @@ def plot_case(case: "Case", out: str | Path) -> Path:
         if y:
             ax.plot(t, y, label=label)
     ax.set_xlabel("t [s]")
-    ax.set_ylabel("longitud [mm]")
+    ax.set_ylabel("length [mm]")
     ax.set_title("Morphometry")
     ax.legend(fontsize=8)
 
@@ -58,11 +58,11 @@ def plot_case(case: "Case", out: str | Path) -> Path:
     ax.set_title("Energy")
     ax.legend(fontsize=8)
 
-    # 3) Contactos
+    # 3) Contacts
     ax = axes[1][0]
     ax.plot(case.time(), case.finite("contacts"), color="tab:orange")
     ax.set_xlabel("t [s]")
-    ax.set_ylabel("contactos")
+    ax.set_ylabel("contacts")
     ax.set_title("Contact network")
 
     # 4) Maximum speed
@@ -84,7 +84,12 @@ def plot_sweep(cases: Sequence["Case"], out: str | Path) -> Path:
     from .models import compare_models
 
     result = compare_models(cases)
-    points = result["puntos"]
+    points = result["points"]
+    energies = [e for e in points["E_J"] if e is not None and e > 0]
+    if points["n"] < 2 or len(energies) < points["n"]:
+        raise SystemExit(
+            "sweep plot needs 2+ cases with a positive launch energy "
+            f"(got {points['n']}); run scripts/energy_sweep.py over the speeds first")
     out = Path(out)
 
     fig, ax = plt.subplots(figsize=(7, 5), constrained_layout=True)

@@ -30,7 +30,7 @@ core::SimConfig smokeConfig(const std::filesystem::path& out_dir) {
     cfg.particles.r_min = 0.8e-3;
     cfg.particles.r_max = 1.2e-3;
     cfg.particles.packing_fraction = 0.524;
-    cfg.particles.young = 1.0e7;          // rigidez reducida -> dt razonable
+    cfg.particles.young = 1.0e7;          // reduced stiffness -> reasonable dt
     cfg.projectile.radius = 6.0e-3;
     cfg.projectile.start_z = 0.024;
     cfg.projectile.speed = 5.0;
@@ -44,7 +44,7 @@ core::SimConfig smokeConfig(const std::filesystem::path& out_dir) {
 
 }  // namespace
 
-TEST(Simulation, ArrancaSimulaYProduceResultados) {
+TEST(Simulation, RunsSimulatesAndProducesResults) {
     const auto out = std::filesystem::temp_directory_path() / "granimpact_smoke";
     std::filesystem::remove_all(out);
 
@@ -116,7 +116,7 @@ TEST(Simulation, ArrancaSimulaYProduceResultados) {
     std::filesystem::remove_all(out);
 }
 
-TEST(Simulation, ElCriterioDeEstabilidadDeRayleighAvisaDeUnDtGrande) {
+TEST(Simulation, RayleighStabilityCriterionWarnsAboutLargeDt) {
     const auto out = std::filesystem::temp_directory_path() / "granimpact_rayleigh";
     auto cfg = smokeConfig(out);
     sim::Simulation simulation(cfg);
@@ -132,7 +132,7 @@ TEST(Simulation, ElCriterioDeEstabilidadDeRayleighAvisaDeUnDtGrande) {
     EXPECT_FALSE(ok_bad);
 }
 
-TEST(Simulation, EscribeVtkYLaColeccionParaView) {
+TEST(Simulation, WritesVtkAndTheParaViewCollection) {
     const auto out = std::filesystem::temp_directory_path() / "granimpact_vtk";
     std::filesystem::remove_all(out);
     auto cfg = smokeConfig(out);
@@ -159,7 +159,7 @@ TEST(Simulation, EscribeVtkYLaColeccionParaView) {
     std::filesystem::remove_all(out);
 }
 
-TEST(Simulation, ElBackendAceleradoNoSeFingeSiNoEstaCompilado) {
+TEST(Simulation, AcceleratedBackendIsNotFakedWhenNotCompiled) {
     const auto out = std::filesystem::temp_directory_path() / "granimpact_backend";
     auto cfg = smokeConfig(out);
     const auto build_openmp = [&]() { sim::Simulation s(cfg, "openmp"); };
@@ -172,7 +172,7 @@ TEST(Simulation, ElBackendAceleradoNoSeFingeSiNoEstaCompilado) {
     EXPECT_THROW(build_unknown(), std::invalid_argument);
 }
 
-TEST(SimConfig, LosValoresPorDefectoDelConfigSonLosDeLaTesis) {
+TEST(SimConfig, DefaultConfigValuesAreTheThesisOnes) {
     const core::SimConfig cfg;
     EXPECT_NEAR(cfg.domain.x, 0.45, 1e-12);
     EXPECT_NEAR(cfg.domain.z, 0.25, 1e-12);
@@ -190,16 +190,16 @@ TEST(SimConfig, LosValoresPorDefectoDelConfigSonLosDeLaTesis) {
     EXPECT_EQ(cfg.simulation.seed, 20240517u);
 }
 
-TEST(SimConfig, ElJsonParcialConservaLosValoresPorDefecto) {
+TEST(SimConfig, PartialJsonKeepsDefaultValues) {
     const std::string text = R"({
-        "simulation": { "name": "parcial", "dt": 1e-6 },
+        "simulation": { "name": "partial", "dt": 1e-6 },
         "particles": { "packing_fraction": 0.574, "r_mean_placeholder": 0 },
         "projectile": { "angle_deg": 45.0 },
         "settle": { "gravity_boost": 2.5 }
     })";
     const auto cfg = core::SimConfig::fromString(text);
 
-    EXPECT_EQ(cfg.simulation.name, "parcial");
+    EXPECT_EQ(cfg.simulation.name, "partial");
     EXPECT_NEAR(cfg.simulation.dt, 1e-6, 1e-18);
     EXPECT_NEAR(cfg.particles.packing_fraction, 0.574, 1e-12);
     EXPECT_NEAR(cfg.projectile.angle_deg, 45.0, 1e-12);
@@ -211,7 +211,7 @@ TEST(SimConfig, ElJsonParcialConservaLosValoresPorDefecto) {
     EXPECT_NEAR(cfg.particles.r_mean(), 5.0e-4, 1e-15);
 }
 
-TEST(SimConfig, LaValidacionRechazaConfiguracionesImposibles) {
+TEST(SimConfig, ValidationRejectsImpossibleConfigurations) {
     core::SimConfig cfg;
     cfg.particles.packing_fraction = 0.9;         // more than the maximum packing
     EXPECT_THROW(cfg.validate(), std::invalid_argument);
@@ -235,7 +235,7 @@ TEST(SimConfig, LaValidacionRechazaConfiguracionesImposibles) {
     EXPECT_THROW(ok.validate(), std::invalid_argument);
 }
 
-TEST(SimConfig, ElJsonSePuedeIdaYVuelta) {
+TEST(SimConfig, JsonRoundTrips) {
     core::SimConfig cfg;
     cfg.simulation.name = "roundtrip";
     cfg.particles.friction = 0.37;

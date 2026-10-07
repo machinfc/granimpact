@@ -62,7 +62,7 @@ def run_case(binary: Path, speed: float, extra: list[str], verbose: bool) -> dic
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--only", nargs="+", type=float, help="velocidades concretas [m/s]")
+    parser.add_argument("--only", nargs="+", type=float, help="specific speeds [m/s]")
     parser.add_argument("--jobs", type=int, default=1, help="cases in parallel (default 1)")
     parser.add_argument("--extra", nargs=argparse.REMAINDER, default=[], help="extra arguments for the simulator")
     parser.add_argument("--no-vtk", action="store_true", help="do not write VTK (faster)")
@@ -85,7 +85,7 @@ def main() -> int:
     if args.no_vtk and "--no-vtk" not in extra:
         extra.append("--no-vtk")
 
-    print(f"Binario : {binary}")
+    print(f"Binary  : {binary}")
     print(f"Config  : {CONFIG}")
     print(f"Cases   : {len(speeds)} -> {', '.join(f'{v:g} m/s' for v in speeds)}")
     print(f"Outputs : {ROOT / 'data' / 'outputs'}")

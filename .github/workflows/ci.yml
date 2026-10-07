@@ -84,7 +84,7 @@ jobs:
           from granimpact_post.models import fit_power_law
           fit = fit_power_law([0.04, 0.16, 0.64], [63.0, 75.0, 89.0])
           assert abs(fit['b'] - 0.25) < 0.02, fit
-          print('post-proceso OK:', fit)
+          print('post-processing OK:', fit)
           "
 
   installer:

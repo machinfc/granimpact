@@ -17,11 +17,12 @@ CANDIDATES=()
 CANDIDATES+=("$SELF/granimpact_cuda" "$SELF/granimpact_openmp" "$SELF/granimpact_serial")
 
 # 3) Source tree (not installed): scripts/granimpact inside the repo.
-if [[ -d "$SELF/../build" ]]; then
+BUILD_ROOT="${GRANIMPACT_BUILD_ROOT:-$SELF/../build}"   # see install.sh --build-dir
+if [[ -d "$BUILD_ROOT" ]]; then
     for d in release omp cuda debug; do
-        CANDIDATES+=("$SELF/../build/$d/bin/granimpact_cuda"
-                     "$SELF/../build/$d/bin/granimpact_openmp"
-                     "$SELF/../build/$d/bin/granimpact_serial")
+        CANDIDATES+=("$BUILD_ROOT/$d/bin/granimpact_cuda"
+                     "$BUILD_ROOT/$d/bin/granimpact_openmp"
+                     "$BUILD_ROOT/$d/bin/granimpact_serial")
     done
 fi
 

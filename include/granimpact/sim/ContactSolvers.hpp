@@ -32,11 +32,11 @@ struct BackendStatus {
 };
 
 #ifdef GRANIMPACT_ENABLE_OPENMP
-// Definido en src/backends/OpenMpSolver.cpp (etapa 4).
+// Defined in src/backends/OpenMpSolver.cpp (stage 4).
 std::unique_ptr<ContactSolver> makeOpenMpContactSolver(const core::SimConfig& config);
 #endif
 #ifdef GRANIMPACT_ENABLE_CUDA
-// Definido en src/backends/CudaSolver.cu (etapa 5).
+// Defined in src/backends/CudaSolver.cu (stage 5).
 std::unique_ptr<ContactSolver> makeCudaContactSolver(const core::SimConfig& config);
 #endif
 

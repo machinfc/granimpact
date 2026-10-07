@@ -2,8 +2,8 @@
 //
  // Adding an accelerated stage means adding a file right here:
  // src/backends/Backend.cpp (this factory)
-//   src/backends/OpenMpBackend.cpp     (etapa 4)
-//   src/backends/CudaBackend.cu        (etapa 5)
+//   src/backends/OpenMpBackend.cpp     (stage 4)
+//   src/backends/CudaBackend.cu        (stage 5)
  // Nothing else has to be touched: not the core, not the analysis, not the outputs.
 #include "SerialSolver.hpp"
 

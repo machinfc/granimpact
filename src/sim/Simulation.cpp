@@ -77,7 +77,7 @@ io::StepRecord Simulation::step(io::StepRecord record, bool measure_crater, Real
     const core::Box box = config_.domain.box();
     const Real gz = config_.gravity.gz * gravity_scale;
 
-    // 1) kick / drift / fronteras
+    // 1) kick / drift / boundaries
     integrator.firstHalfKick(particles_);
     integrator.drift(particles_);
     physics::applyBoundaries(particles_, box, config_);
@@ -150,7 +150,7 @@ SimulationResult Simulation::run(std::ostream& log) {
     if (config_.settle.max_steps > 0) settle_steps = config_.settle.max_steps;
     log << " Settling: up to " << settle_steps << " steps"
         << (config_.settle.gravity_boost != 1.0
-                ? "  (gravedad x" + std::to_string(config_.settle.gravity_boost) + ")"
+                ? "  (gravity x" + std::to_string(config_.settle.gravity_boost) + ")"
                 : "")
         << " (cut by energy convergence)\n";
 
@@ -198,11 +198,11 @@ SimulationResult Simulation::run(std::ostream& log) {
     settle_steps_used_ = used_steps;
     settle_converged_ = converged;
     log << " Settling finished in " << used_steps << " steps (t = " << record.time
-        << " s, Ek/particula = "
+        << " s, Ek/particle = "
         << (particles_.empty() ? 0.0
                                 : particles_.kineticEnergy() / static_cast<core::Real>(particles_.size()))
            << " J)"
-        << (converged ? "  [convergido]" : "  [NO convergio: sube t_settle]") << "\n";
+        << (converged ? "  [converged]" : "  [no convergence: increase t_settle]") << "\n";
 
     // Reference surface = the already settled bed: it is the crater's zero.
     analyzer_.recordReferenceSurface(particles_);

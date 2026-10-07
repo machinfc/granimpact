@@ -17,7 +17,7 @@ struct DomainConfig {
 
 struct ParticleConfig {
     Real r_min{0.0004}, r_max{0.0006};   // 0.4-0.6 mm radius (d <= 1 mm)
-    Real rho_grain{2650.0};              // cuarzo 2.65 g/cm3
+    Real rho_grain{2650.0};              // quartz 2.65 g/cm3
     Real packing_fraction{0.524};        // loose-bed TARGET (the thesis measures
                                          // 0.524; the value actually reached is measured)
     Real bed_height_fraction{0.60};      // fraction of the box height where

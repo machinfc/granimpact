@@ -1,6 +1,6 @@
 #pragma once
 // Hertz-Mindlin contact model (Hertz normal + Mindlin tangential + Coulomb).
-// Referencias: Hertz (1882), Mindlin & Deresiewicz (1953), Thornton & Yin (1991),
+// References: Hertz (1882), Mindlin & Deresiewicz (1953), Thornton & Yin (1991),
 // Di Renzo & Di Maio (2004). See docs/physics.md for the derivations.
 #include <cstdint>
 #include <unordered_map>
@@ -27,8 +27,8 @@ struct ContactStats {
 struct EffectiveProperties {
     Real e_star{0};   // effective Young's modulus
     Real g_star{0};   // effective shear modulus
-    Real r_star{0};   // radio efectivo
-    Real m_eff{0};    // masa efectiva
+    Real r_star{0};   // effective radius
+    Real m_eff{0};    // effective mass
 };
 
 class ContactModel {

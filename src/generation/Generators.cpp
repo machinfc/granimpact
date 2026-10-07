@@ -89,7 +89,7 @@ BedInfo generateBed(core::ParticleSystem& particles, const core::SimConfig& conf
     // The real final density is MEASURED and reported (never assumed).
     // ==========================================================================
     const Real s = Real(2.01) * pc.r_max;            // horizontal spacing (no overlaps)
-    const Real dz_dense = Real(1.42) * pc.r_max;     // anidado: contacto capa a capa
+    const Real dz_dense = Real(1.42) * pc.r_max;     // nested: layer-by-layer contact
 
     // Mean grain volume: (4/3) pi E[r^3], with r uniform in [r_min, r_max].
     const Real e_r3 = (std::pow(pc.r_max, 4) - std::pow(pc.r_min, 4))

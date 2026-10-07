@@ -19,11 +19,11 @@ namespace granimpact::analysis {
 
 struct CraterObservables {
     // Geometry
-    core::Real d_exc{0};        // profundidad excavada [m]
-    core::Real d_max{0};        // profundidad aparente = h_rim + d_exc [m]
+    core::Real d_exc{0};        // excavated depth [m]
+    core::Real d_max{0};        // apparent depth = h_rim + d_exc [m]
     core::Real D{0};            // major diameter [m]
     core::Real d_minor{0};      // minor diameter [m]
-    core::Real epsilon{0};      // excentricidad (0 = circular)
+    core::Real epsilon{0};      // eccentricity (0 = circular)
     core::Real theta_rad{0};    // major-axis orientation
     core::Real h_rim{0};        // rim height above the reference surface
     core::Real aspect_zd{0};    // d_exc / D (the thesis Z/D)

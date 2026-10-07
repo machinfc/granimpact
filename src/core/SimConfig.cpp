@@ -31,7 +31,7 @@ SimConfig SimConfig::fromString(const std::string& text) {
     try {
         root = json::parse(text);
     } catch (const json::parse_error& e) {
-        throw std::invalid_argument(std::string("JSON invalido: ") + e.what());
+        throw std::invalid_argument(std::string("invalid JSON: ") + e.what());
     }
 
     SimConfig cfg;
@@ -100,18 +100,18 @@ void SimConfig::validate() const {
     const auto fail = [](const std::string& msg) { throw std::invalid_argument("config: " + msg); };
 
     if (domain.x <= 0 || domain.y <= 0 || domain.z <= 0) fail("domain must be positive");
-    if (particles.r_min <= 0 || particles.r_max < particles.r_min) fail("r_min/r_max incoherentes");
+    if (particles.r_min <= 0 || particles.r_max < particles.r_min) fail("r_min/r_max are inconsistent");
     if (particles.packing_fraction <= 0.05 || particles.packing_fraction > 0.64)
         fail("packing_fraction out of physical range (0.05 - 0.64)");
     if (particles.restitution < 0 || particles.restitution > 1) fail("restitution out of [0,1]");
-    if (particles.friction < 0) fail("friction negativa");
+    if (particles.friction < 0) fail("friction must be >= 0");
     if (particles.bed_height_fraction <= 0.05 || particles.bed_height_fraction > 0.95)
         fail("bed_height_fraction out of (0.05, 0.95]");
     if (settle.gravity_boost <= 0) fail("settle.gravity_boost must be > 0");
     if (settle.ke_tolerance < 0) fail("settle.ke_tolerance cannot be negative");
     if (settle.velocity_damping < 0) fail("settle.velocity_damping cannot be negative");
     if (projectile.radius <= 0) fail("projectile.radius must be positive");
-    if (projectile.speed < 0) fail("projectile.speed negativa");
+    if (projectile.speed < 0) fail("projectile.speed must be >= 0");
     if (projectile.angle_deg <= 0 || projectile.angle_deg > 90) fail("angle_deg must be in (0, 90]");
     if (simulation.dt <= 0) fail("dt must be positive");
     if (simulation.t_end <= 0) fail("t_end must be positive");

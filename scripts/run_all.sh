@@ -14,26 +14,34 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN=""
-for c in "$ROOT/build/release/bin/granimpact_serial" "$ROOT/build/omp/bin/granimpact_openmp" \
-         "$ROOT/build/debug/bin/granimpact_serial"; do
+BUILD_ROOT="${GRANIMPACT_BUILD_ROOT:-$ROOT/build}"   # see install.sh --build-dir
+for c in "$BUILD_ROOT/release/bin/granimpact_serial" "$BUILD_ROOT/omp/bin/granimpact_openmp" \
+         "$BUILD_ROOT/debug/bin/granimpact_serial"; do
     [[ -x "$c" ]] && BIN="$c" && break
 done
 [[ -n "$BIN" ]] || { echo "ERROR: build first with ./scripts/install.sh" >&2; exit 127; }
 
+# Arguments: case names are anything that is not a flag. Flags that take a value
+# must consume it here (--t-settle 0.02): otherwise the value would be taken for
+# a case name. `--` stops flag parsing.
 EXTRA=()
 CASES=()
-for arg in "$@"; do
-    case "$arg" in
-        --no-vtk) EXTRA+=(--no-vtk) ;;
-        -*)       EXTRA+=("$arg") ;;
-        *)        CASES+=("$arg") ;;
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --no-vtk) EXTRA+=(--no-vtk); shift ;;
+        --dt|--t-end|--t-settle|--seed|--speed|--name|--backend|--out)
+            [[ $# -ge 2 ]] || { echo "ERROR: $1 needs a value" >&2; exit 2; }
+            EXTRA+=("$1" "$2"); shift 2 ;;
+        --)       shift; while [[ $# -gt 0 ]]; do CASES+=("$1"); shift; done ;;
+        -*)       EXTRA+=("$1"); shift ;;
+        *)        CASES+=("$1"); shift ;;
     esac
 done
 if [[ ${#CASES[@]} -eq 0 ]]; then
     CASES=(default loose_vertical compact_vertical loose_oblique45 lunar_impact energy_sweep)
 fi
 
-printf 'Binario: %s\n' "$BIN"
+printf 'Binary: %s\n' "$BIN"
 failed=()
 for case_name in "${CASES[@]}"; do
     cfg="$ROOT/configs/$case_name.json"
@@ -54,7 +62,7 @@ printf '\n=== Summary ===\n'
 for case_name in "${CASES[@]}"; do
     summary="$ROOT/data/outputs/$case_name/${case_name}_summary.txt"
     if [[ -f "$summary" ]]; then
-        printf '%-16s %s\n' "$case_name" "$(grep -E '^  (D \(diameter\)|d_exc) "$summary" | tr '\n' ' ' | tr -s ' ')"
+        printf '%-16s %s\n' "$case_name" "$(grep -E '^  (D \(diameter\)|d_exc)' "$summary" | tr '\n' ' ' | tr -s ' ')"
     fi
 done
 [[ ${#failed[@]} -eq 0 ]] && echo "All cases finished." || { echo "Failed: ${failed[*]}"; exit 1; }

@@ -27,7 +27,7 @@ core::SimConfig testConfig() {
 
 }  // namespace
 
-TEST(Generators, LaCamaSeSiembraDentroDeLaRegionSinSolapes) {
+TEST(Generators, BedIsSeededInsideRegionWithoutOverlaps) {
     auto cfg = testConfig();
     core::ParticleSystem ps;
     std::mt19937_64 rng(cfg.simulation.seed);
@@ -52,7 +52,7 @@ TEST(Generators, LaCamaSeSiembraDentroDeLaRegionSinSolapes) {
     }
 }
 
-TEST(Generators, DosGranosCualesquieraEstanSeparados) {
+TEST(Generators, AnyTwoGrainsAreSeparated) {
     auto cfg = testConfig();
     core::ParticleSystem ps;
     std::mt19937_64 rng(4242);
@@ -68,7 +68,7 @@ TEST(Generators, DosGranosCualesquieraEstanSeparados) {
     EXPECT_EQ(overlaps, 0u);
 }
 
-TEST(Generators, ConRadiosEstrechosLaRedAlcanzaLaDensidadObjetivo) {
+TEST(Generators, NarrowRadiusSpreadReachesTargetDensity) {
     // Generator contract: the nested lattice is expanded to land EXACTLY on the
     // target density, and that is only possible if the dense lattice is denser than
     // the target. With a narrow radius range (1.10:1 here) it is, and the seeded
@@ -88,7 +88,7 @@ TEST(Generators, ConRadiosEstrechosLaRedAlcanzaLaDensidadObjetivo) {
     EXPECT_GT(info.count, 100u);
 }
 
-TEST(Generators, ConRadiosAnchosNoSeComprimeLaRed) {
+TEST(Generators, WideRadiusSpreadDoesNotCompressTheLattice) {
     // With a wide range (1.5:1, as in the smoke test) the dense lattice falls below
     // the target. The design decision is NOT to compress - compressing would create
     // overlaps - and to report the density obtained: the bed ends up looser and
@@ -105,7 +105,7 @@ TEST(Generators, ConRadiosAnchosNoSeComprimeLaRed) {
     EXPECT_GT(info.count, 100u);
 }
 
-TEST(Generators, LasParticulasDeLaCamaLlevanElMaterialDelConfig) {
+TEST(Generators, BedParticlesCarryConfigMaterial) {
     auto cfg = testConfig();
     cfg.particles.young = 1.0e7;
     cfg.particles.friction = 0.37;
@@ -123,7 +123,7 @@ TEST(Generators, LasParticulasDeLaCamaLlevanElMaterialDelConfig) {
     EXPECT_NEAR(ps.mass()[0], expected, expected * 1e-12);
 }
 
-TEST(Generators, ElProyectilEsUnaEsferaDeGranosConLaVelocidadPedida) {
+TEST(Generators, ProjectileIsAGrainSphereWithRequestedSpeed) {
     auto cfg = testConfig();
     cfg.projectile.speed = 2.0;
     cfg.projectile.angle_deg = 90.0;
@@ -152,7 +152,7 @@ TEST(Generators, ElProyectilEsUnaEsferaDeGranosConLaVelocidadPedida) {
     EXPECT_GT(max_dist, 0.5 * cfg.projectile.radius);
 }
 
-TEST(Generators, ElAnguloInclinadoReparteLaVelocidadEnXY) {
+TEST(Generators, ObliqueAngleSplitsSpeedInXY) {
     auto cfg = testConfig();
     cfg.projectile.speed = 2.0;
     cfg.projectile.angle_deg = 45.0;
@@ -166,7 +166,7 @@ TEST(Generators, ElAnguloInclinadoReparteLaVelocidadEnXY) {
     EXPECT_NEAR(ps.velocity()[0].z, -2.0 * std::sin(core::kPi / 4), 1e-12);
 }
 
-TEST(Generators, DosGeneracionesConLaMismaSemillaSonIdenticas) {
+TEST(Generators, TwoGenerationsWithSameSeedAreIdentical) {
     auto cfg = testConfig();
     core::ParticleSystem a, b;
     std::mt19937_64 ra(cfg.simulation.seed), rb(cfg.simulation.seed);
@@ -179,7 +179,7 @@ TEST(Generators, DosGeneracionesConLaMismaSemillaSonIdenticas) {
     }
 }
 
-TEST(Generators, LaFraccionDeEmpaquetamientoMedidaUsaElVolumenSolido) {
+TEST(Generators, MeasuredPackingFractionUsesSolidVolume) {
     core::ParticleSystem ps;
     ps.add({0, 0, 0}, 1e-3, 2650.0, core::ParticleKind::Bed);
     ps.add({0, 0, 0.01}, 1e-3, 2650.0, core::ParticleKind::Bed);

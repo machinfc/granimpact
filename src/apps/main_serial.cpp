@@ -71,19 +71,41 @@ int main(int argc, char** argv) {
             }
             return argv[++i];
         };
+        // Numeric values are checked here, during parsing: a typo must give a
+        // clean message, not an uncaught std::stod exception.
+        const auto number = [&](const char* what) -> double {
+            const std::string value = next(what);
+            try {
+                return std::stod(value);
+            } catch (const std::exception&) {
+                // handled below, out of the catch, so std::exit is not "returning"
+            }
+            std::cerr << "Invalid number for " << what << ": '" << value << "'\n";
+            std::exit(2);
+        };
+        const auto integer = [&](const char* what) -> std::uint64_t {
+            const std::string value = next(what);
+            try {
+                return std::stoull(value);
+            } catch (const std::exception&) {
+                // handled below
+            }
+            std::cerr << "Invalid integer for " << what << ": '" << value << "'\n";
+            std::exit(2);
+        };
         if (arg == "-h" || arg == "--help") { printUsage(); return 0; }
         if (arg == "--backends") return listBackends();
         else if (arg == "--backend") backend = next("--backend");
         else if (arg == "--out") out_dir = next("--out");
         else if (arg == "--name") case_name = next("--name");
-        else if (arg == "--dt") { dt = std::stod(next("--dt")); has_dt = true; }
-        else if (arg == "--t-end") { t_end = std::stod(next("--t-end")); has_t_end = true; }
-        else if (arg == "--t-settle") { t_settle = std::stod(next("--t-settle")); has_settle = true; }
-        else if (arg == "--seed") { seed = std::stoull(next("--seed")); has_seed = true; }
-        else if (arg == "--speed") { speed = std::stod(next("--speed")); has_speed = true; }
+        else if (arg == "--dt") { dt = number("--dt"); has_dt = true; }
+        else if (arg == "--t-end") { t_end = number("--t-end"); has_t_end = true; }
+        else if (arg == "--t-settle") { t_settle = number("--t-settle"); has_settle = true; }
+        else if (arg == "--seed") { seed = integer("--seed"); has_seed = true; }
+        else if (arg == "--speed") { speed = number("--speed"); has_speed = true; }
         else if (arg == "--no-vtk") no_vtk = true;
         else if (!arg.empty() && arg[0] == '-') {
-            std::cerr << "Opcion desconocida: " << arg << "\n";
+            std::cerr << "Unknown option: " << arg << "\n";
             printUsage();
             return 2;
         } else if (config_path.empty()) {
@@ -91,8 +113,8 @@ int main(int argc, char** argv) {
         }
     }
 
-    // in cluster queues, in the output file, without waiting for the run to finish).
-    // Reference (serial) implementation and contact solver factory.
+    // Unbuffered stdout: in multi-hour runs the progress must be visible live
+    // (cluster queues, output files) without waiting for the run to finish.
     std::cout << std::unitbuf;
 
     if (config_path.empty()) {

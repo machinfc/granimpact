@@ -50,7 +50,7 @@ core::ParticleSystem bedWithDepression(const core::SimConfig& cfg, core::Real z_
 
 }  // namespace
 
-TEST(CraterModels, DiametroSegunElModeloLogaritmicoDeLaTesis) {
+TEST(CraterModels, DiameterFollowsTheLogModelFromTheThesis) {
     // E = 1 kJ -> D = 0.089 * 3 = 0.267 m
     EXPECT_NEAR(analysis::models::diameterLogModel(1000.0), 0.089 * 3.0, 1e-12);
     EXPECT_GT(analysis::models::diameterLogModel(5000.0),
@@ -60,20 +60,20 @@ TEST(CraterModels, DiametroSegunElModeloLogaritmicoDeLaTesis) {
     EXPECT_EQ(analysis::models::diameterLogModel(0.5), 0.0);
 }
 
-TEST(CraterModels, DiametroSegunUeharaEscalaConLaEnergiaALaUnCuarto) {
+TEST(CraterModels, UeharaDiameterScalesWithEnergyToTheOneFourth) {
     const core::Real d1 = analysis::models::diameterUeharaModel(10.0, 1500.0, 2650.0, 0.07);
     const core::Real d16 = analysis::models::diameterUeharaModel(160.0, 1500.0, 2650.0, 0.07);
     EXPECT_GT(d1, 0.0);
     EXPECT_NEAR(d16 / d1, 2.0, 1e-12);   // 16x energy -> 2x diameter
 }
 
-TEST(CraterModels, ProfundidadSegunHeckel) {
+TEST(CraterModels, DepthFollowsHeckel) {
     EXPECT_NEAR(analysis::models::depthHeckelModel(0.05, 0.5, 0.5), 0.0, 1e-15);
     EXPECT_GT(analysis::models::depthHeckelModel(0.05, 0.524, 0.60), 0.0);
     EXPECT_NEAR(analysis::models::depthHeckelModel(0.05, 0.30, 0.60), 0.025, 1e-15);
 }
 
-TEST(CraterAnalyzer, RecuperaLaGeometriaDeUnaDepresionConocida) {
+TEST(CraterAnalyzer, RecoversGeometryOfAKnownDepression) {
     const auto cfg = syntheticConfig();
     const core::Real z_ref = 0.05;
     const core::Real depth = 0.02;
@@ -101,7 +101,7 @@ TEST(CraterAnalyzer, RecuperaLaGeometriaDeUnaDepresionConocida) {
     EXPECT_GT(obs.phi_bed, 0.0);
 }
 
-TEST(CraterAnalyzer, DetectaUnaDepresionElongada) {
+TEST(CraterAnalyzer, DetectsAnElongatedDepression) {
     const auto cfg = syntheticConfig();
     auto flat = bedWithDepression(cfg, 0.05, 0.0, 0.025, 0.025);
     auto elongated = bedWithDepression(cfg, 0.05, 0.01, 0.025, 0.010);
@@ -115,7 +115,7 @@ TEST(CraterAnalyzer, DetectaUnaDepresionElongada) {
     EXPECT_GT(obs.D, obs.d_minor);
 }
 
-TEST(CraterAnalyzer, UnaSuperficiePlanaNoGeneraCrater) {
+TEST(CraterAnalyzer, AFlatSurfaceProducesNoCrater) {
     const auto cfg = syntheticConfig();
     auto flat = bedWithDepression(cfg, 0.05, 0.0, 0.02, 0.02);
 
@@ -129,7 +129,7 @@ TEST(CraterAnalyzer, UnaSuperficiePlanaNoGeneraCrater) {
     EXPECT_GT(obs.bed_height, 0.0);              // the bed is reported all the same
 }
 
-TEST(CraterAnalyzer, ElMargenFiltraElRuidoDeEscalaDelGrano) {
+TEST(CraterAnalyzer, MarginFiltersGrainScaleNoise) {
     const auto cfg = syntheticConfig();
     auto flat = bedWithDepression(cfg, 0.05, 0.0, 0.02, 0.02);
     // Subsidence by half a particle: it must not be read as a crater.
@@ -141,7 +141,7 @@ TEST(CraterAnalyzer, ElMargenFiltraElRuidoDeEscalaDelGrano) {
     EXPECT_EQ(obs.crater_cells, 0u);
 }
 
-TEST(CraterAnalyzer, ClasificaSegunLaRazonDeAspectoZ) {
+TEST(CraterAnalyzer, ClassifiesByAspectRatioZ) {
     const auto cfg = syntheticConfig();
     // Deep, narrow crater -> high Z/D -> 'Simple (deep)'.
     auto flat = bedWithDepression(cfg, 0.08, 0.0, 0.008, 0.008);

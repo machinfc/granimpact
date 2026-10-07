@@ -70,7 +70,7 @@ class Case:
     def time(self) -> list[float]:
         return self.finite("t")
 
-    # ------------------------------------------------------------- momento clave --
+    # ------------------------------------------------------------- key moment -----
     def impact_row(self) -> int | None:
         """First row where the projectile already touches something, i.e. the
         start of the impact. If no contacts are recorded, the first row with
@@ -212,13 +212,22 @@ def sweep_table(cases: Sequence[Case]) -> list[dict[str, float | str | None]]:
 
 
 def _launch_energy(case: Case) -> float | None:
-    """Launch kinetic energy = 1/2 m v^2, with the mass measured in the run.
+    """Launch kinetic energy of the projectile, in joules.
 
-    Computed from the CSV (not from nominal values): the projectile is a
-    set of grains generated with a seed, so its mass is a result.
+    Order of preference:
+      1) `launch_energy_J` from the CSV footer: measured by the simulator itself;
+      2) 1/2 m v^2 with the mass recovered from the first untouched row (older
+         CSVs without that footer field). That fallback fails for settled beds,
+         where the particles already touch at t = 0.
     """
     from .mass import projectile_mass_kg  # local import: avoids circular dependencies
 
+    footer = case.meta.get("launch_energy_J")
+    if footer is not None:
+        try:
+            return float(footer)
+        except ValueError:
+            pass
     mass = projectile_mass_kg(case)
     speed = case.meta.get("v")
     if mass is None or speed is None:

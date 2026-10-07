@@ -8,7 +8,8 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN=""
-for c in "$ROOT/build/release/bin/granimpact_serial" "$ROOT/build/debug/bin/granimpact_serial"; do
+BUILD_ROOT="${GRANIMPACT_BUILD_ROOT:-$ROOT/build}"   # see install.sh --build-dir
+for c in "$BUILD_ROOT/release/bin/granimpact_serial" "$BUILD_ROOT/debug/bin/granimpact_serial"; do
     [[ -x "$c" ]] && BIN="$c" && break
 done
 [[ -n "$BIN" ]] || { echo "ERROR: build first with ./scripts/install.sh" >&2; exit 127; }

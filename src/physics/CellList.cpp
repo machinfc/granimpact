@@ -49,7 +49,7 @@ void CellList::build(const core::ParticleSystem& particles, const core::Box& box
         ++counts_[c + 1];
     }
 
-    // 2) prefijos (CSR)
+    // 2) prefixes (CSR)
     for (std::size_t c = 1; c < counts_.size(); ++c) counts_[c] += counts_[c - 1];
     cell_start_.assign(counts_.begin(), counts_.end());
 

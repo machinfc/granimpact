@@ -1,6 +1,6 @@
 // Verifies the integrator against analytical solutions. If this passes, the errors
 // that show up in a simulation come from the physics or the collisions, not from
-// esquema temporal.
+// the time-stepping scheme.
 #include <gtest/gtest.h>
 
 #include <cmath>
@@ -23,7 +23,7 @@ core::ParticleSystem twoParticles() {
 
 }  // namespace
 
-TEST(Integrator, CaidaLibreCoincideConLaSolucionAnalitica) {
+TEST(Integrator, FreeFallMatchesAnalyticSolution) {
     auto ps = twoParticles();
     const core::Real dt = 1e-5;
     const core::Real gz = -9.81;
@@ -41,7 +41,7 @@ TEST(Integrator, CaidaLibreCoincideConLaSolucionAnalitica) {
     EXPECT_NEAR(ps.velocity()[0].z, -9.81 * t, 1e-12);
 }
 
-TEST(Integrator, VerletConservaEnergiaEnCampoConstante) {
+TEST(Integrator, VerletConservesEnergyInConstantField) {
     auto ps = twoParticles();
     const core::Real dt = 1e-5;
     physics::VelocityVerlet integrator(ps, dt, -9.81);
@@ -54,7 +54,7 @@ TEST(Integrator, VerletConservaEnergiaEnCampoConstante) {
     EXPECT_NEAR(e1, e0, std::abs(e0) * 1e-12 + 1e-20);
 }
 
-TEST(Integrator, LasFasesKickDriftKickCoincidenConFreeStep) {
+TEST(Integrator, KickDriftKickPhasesMatchFreeStep) {
     auto a = twoParticles();
     auto b = twoParticles();
     const core::Real dt = 1e-5;
@@ -77,7 +77,7 @@ TEST(Integrator, LasFasesKickDriftKickCoincidenConFreeStep) {
     EXPECT_NEAR(a.velocity()[0].z, b.velocity()[0].z, 1e-14);
 }
 
-TEST(Integrator, FronterasPeriodicasEnvolvenLasParticulas) {
+TEST(Integrator, PeriodicBoundariesWrapParticles) {
     auto ps = twoParticles();
     core::SimConfig cfg;
     cfg.domain = {0.1, 0.1, 0.1};
@@ -93,7 +93,7 @@ TEST(Integrator, FronterasPeriodicasEnvolvenLasParticulas) {
     EXPECT_LT(ps.position()[0].y, 0.1);
 }
 
-TEST(Integrator, ParedesRigidasRebotanConRestitucion) {
+TEST(Integrator, RigidWallsBounceWithRestitution) {
     auto ps = twoParticles();
     core::SimConfig cfg;
     cfg.domain = {0.1, 0.1, 0.1};

@@ -5,7 +5,7 @@
 #  executables on top. OpenMP and CUDA are enabled by options and add code
 #  (src/backends/*) without touching the core -> "just keep adding code".
 #
-#  Presets listos:  cmake --preset debug | release | asan | omp | cuda
+#  Presets available: cmake --preset debug | release | asan | omp | cuda
 # ============================================================================
 cmake_minimum_required(VERSION 3.20)
 
@@ -17,9 +17,9 @@ project(granimpact
 
 # ------------------------------------------------------------------ options --
 option(GRANIMPACT_BUILD_TESTS      "Build and register the unit tests" ON)
-option(GRANIMPACT_BUILD_TOOLS      "Compilar utilidades auxiliares"           ON)
-option(GRANIMPACT_ENABLE_OPENMP    "Activar el backend OpenMP"                OFF)
-option(GRANIMPACT_ENABLE_CUDA      "Activar el backend CUDA"                  OFF)
+option(GRANIMPACT_BUILD_TOOLS      "Build auxiliary tools"           ON)
+option(GRANIMPACT_ENABLE_OPENMP    "Enable the OpenMP backend"                OFF)
+option(GRANIMPACT_ENABLE_CUDA      "Enable the CUDA backend"                  OFF)
 option(GRANIMPACT_ENABLE_SANITIZERS "Build with ASan + UBSan (development)"  OFF)
 option(GRANIMPACT_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(GRANIMPACT_USE_SYSTEM_DEPS  "Use system nlohmann_json/googletest (no download)" OFF)
@@ -35,7 +35,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)   # for clangd / clang-tidy
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-# ------------------------------------------------------------------ avisos ----
+# ------------------------------------------------------------------ warnings --
 set(GRANIMPACT_WARNINGS
     -Wall -Wextra -Wpedantic -Wshadow -Wnon-virtual-dtor -Wcast-align
     -Wunused -Woverloaded-virtual -Wconversion -Wsign-conversion -Wdouble-promotion)
@@ -43,7 +43,7 @@ if(GRANIMPACT_WARNINGS_AS_ERRORS)
     list(APPEND GRANIMPACT_WARNINGS -Werror)
 endif()
 
-# ---------------------------------------------------------- dependencias ------
+# ---------------------------------------------------------- dependencies ------
 include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
 
@@ -57,7 +57,7 @@ else()
     FetchContent_MakeAvailable(nlohmann_json)
 endif()
 
-# ------------------------------------------------------------- biblioteca -----
+# ------------------------------------------------------------- library --------
 file(GLOB_RECURSE GRANIMPACT_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/physics/*.cpp
@@ -101,7 +101,7 @@ if(GRANIMPACT_ENABLE_CUDA)
     target_link_libraries(granimpact_core PUBLIC CUDA::cudart)
 endif()
 
-# --------------------------------------------------------------- ejecutables --
+# --------------------------------------------------------------- executables --
 add_executable(granimpact_serial src/apps/main_serial.cpp)
 target_link_libraries(granimpact_serial PRIVATE granimpact_core)
 target_compile_options(granimpact_serial PRIVATE ${GRANIMPACT_WARNINGS})
@@ -136,7 +136,7 @@ install(DIRECTORY python/granimpact_post
 install(DIRECTORY scripts/ DESTINATION ${CMAKE_INSTALL_DATADIR}/granimpact/scripts
         USE_SOURCE_PERMISSIONS)
 
-# Lanzador `granimpact`: elige el mejor backend compilado (cuda > openmp > serial).
+# `granimpact` launcher: picks the best compiled backend (cuda > openmp > serial).
 # Once stages 4-5 exist, building them is enough; the launcher detects them.
 install(PROGRAMS scripts/granimpact DESTINATION ${CMAKE_INSTALL_BINDIR})
 

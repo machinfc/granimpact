@@ -22,8 +22,8 @@ namespace {
 core::ParticleSystem overlappingPair(core::Real overlap, core::Real v_rel = 0) {
     core::ParticleSystem ps;
     const core::Real r = 1e-3;
-    ps.add({0, 0, r}, r, 2650.0, core::ParticleKind::Bed);                    // abajo
-    ps.add({0, 0, r + 2 * r - overlap}, r, 2650.0, core::ParticleKind::Bed); // arriba
+    ps.add({0, 0, r}, r, 2650.0, core::ParticleKind::Bed);                    // below
+    ps.add({0, 0, r + 2 * r - overlap}, r, 2650.0, core::ParticleKind::Bed); // above
     ps.setMaterial(70e9, 0.3, 0.4, 0.5);
     ps.velocity()[1] = {0, 0, v_rel};
     return ps;
@@ -31,7 +31,7 @@ core::ParticleSystem overlappingPair(core::Real overlap, core::Real v_rel = 0) {
 
 }  // namespace
 
-TEST(ContactModel, PropiedadesEfectivasIgualesParaEsferasIdenticas) {
+TEST(ContactModel, EffectivePropertiesEqualForIdenticalSpheres) {
     const auto p = ContactModel::effectiveProperties(1e-3, 1e-3, 70e9, 70e9, 0.3, 0.3,
                                                      2.0e-5, 2.0e-5);
     // E* = E / (2 (1 - nu^2))
@@ -47,7 +47,7 @@ TEST(ContactModel, PropiedadesEfectivasIgualesParaEsferasIdenticas) {
     EXPECT_LT(p.g_star, 0.30 * p.e_star);
 }
 
-TEST(ContactModel, FuerzaNormalSigueLaLeyDeHertz) {
+TEST(ContactModel, NormalForceFollowsHertzLaw) {
     const auto p = ContactModel::effectiveProperties(1e-3, 1e-3, 70e9, 70e9, 0.3, 0.3, 1e-5, 1e-5);
     const core::Real delta = 1e-7;
     const core::Real f = ContactModel::hertzNormalForce(p, delta);
@@ -59,19 +59,19 @@ TEST(ContactModel, FuerzaNormalSigueLaLeyDeHertz) {
     EXPECT_EQ(ContactModel::hertzNormalForce(p, 0.0), 0.0);
 }
 
-TEST(ContactModel, ElAmortiguamientoBajaConElCoeficienteDeRestitucion) {
+TEST(ContactModel, DampingDecreasesWithRestitutionCoefficient) {
     const auto p = ContactModel::effectiveProperties(1e-3, 1e-3, 70e9, 70e9, 0.3, 0.3, 1e-5, 1e-5);
     const core::Real k = 1e5;
-    const core::Real g_elastico = ContactModel::normalDamping(1.0, p.m_eff, k);
-    const core::Real g_medio = ContactModel::normalDamping(0.5, p.m_eff, k);
+    const core::Real g_elastic = ContactModel::normalDamping(1.0, p.m_eff, k);
+    const core::Real g_mid = ContactModel::normalDamping(0.5, p.m_eff, k);
     const core::Real g_inelastico = ContactModel::normalDamping(0.1, p.m_eff, k);
 
-    EXPECT_EQ(g_elastico, 0.0);              // e = 1 -> no dissipation
-    EXPECT_GT(g_medio, 0.0);
-    EXPECT_GT(g_inelastico, g_medio);        // lower restitution -> more dissipation
+    EXPECT_EQ(g_elastic, 0.0);              // e = 1 -> no dissipation
+    EXPECT_GT(g_mid, 0.0);
+    EXPECT_GT(g_inelastico, g_mid);        // lower restitution -> more dissipation
 }
 
-TEST(ContactModel, DosParticulasQueSeSolapanSeRepelenConFuerzasOpuestas) {
+TEST(ContactModel, TwoOverlappingParticlesRepelWithOppositeForces) {
     auto ps = overlappingPair(1e-7);
     core::SimConfig cfg;
     cfg.particles.r_min = 1e-3;
@@ -103,7 +103,7 @@ TEST(ContactModel, DosParticulasQueSeSolapanSeRepelenConFuerzasOpuestas) {
                 ContactModel::hertzNormalForce(props, 1e-7) * 1e-9);
 }
 
-TEST(ContactModel, ColisionDisipaEnergiaYRespetaElCoeficienteDeRestitucion) {
+TEST(ContactModel, CollisionDissipatesEnergyAndRespectsRestitution) {
     // Head-on collision of two identical particles with e = 0.8: the relative velocity
     // must land around e * v0 (the damping model is approximate, hence the
     // tolerance).
@@ -145,15 +145,15 @@ TEST(ContactModel, ColisionDisipaEnergiaYRespetaElCoeficienteDeRestitucion) {
         integrator.secondHalfKick(ps);
     }
 
-    // v_rel = v_abajo - v_arriba. Se acercaban (v_rel > 0) y deben separarse
-    // (v_rel < 0) with |v_rel| ~ e * 2v0.
+    // v_rel = v_below - v_above: they were approaching (v_rel > 0) and must
+    // separate now (v_rel < 0), with |v_rel| ~ e * 2v0.
     const core::Real v_rel = ps.velocity()[0].z - ps.velocity()[1].z;
     EXPECT_LT(v_rel, 0.0);
     EXPECT_NEAR(std::abs(v_rel), 0.8 * 2 * v0, 0.10 * 2 * v0);
     EXPECT_LT(ps.kineticEnergy(), e0);                       // and it dissipates energy
 }
 
-TEST(ContactModel, LaFuerzaTangencialSeLimitaPorCoulomb) {
+TEST(ContactModel, TangentialForceIsLimitedByCoulomb) {
     // With friction 0 there can be no tangential force no matter how large the
     // tangential slip is: the limit mu*Fn cancels it.
     auto ps = overlappingPair(1e-7);
@@ -181,7 +181,7 @@ TEST(ContactModel, LaFuerzaTangencialSeLimitaPorCoulomb) {
     EXPECT_NEAR(ps.force()[1].x, 0.0, 1e-18);
 }
 
-TEST(ContactModel, LaListaDeCeldasEncuentraTodosLosContactos) {
+TEST(ContactModel, CellListFindsAllContacts) {
     // With random particles, the number of detected contacts must match a
     // brute-force search exactly.
     std::mt19937_64 rng(20240517);

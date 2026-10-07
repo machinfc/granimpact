@@ -27,7 +27,7 @@ core::ParticleSystem randomCloud(std::size_t n, core::Real box_side, core::Real 
 
 }  // namespace
 
-TEST(CellList, CadaParSeVisitaUnaSolaVez) {
+TEST(CellList, EachPairIsVisitedOnce) {
     const core::Real side = 0.05;
     auto ps = randomCloud(200, side, 2e-3, 7);
     const core::Box box{{0, 0, 0}, {side, side, side}};
@@ -46,7 +46,7 @@ TEST(CellList, CadaParSeVisitaUnaSolaVez) {
     EXPECT_EQ(count, seen.size());
 }
 
-TEST(CellList, EncuentraTodosLosParesDentroDelRadioDeCorte) {
+TEST(CellList, FindsAllPairsWithinCutoffRadius) {
     const core::Real side = 0.06;
     const core::Real radius = 1.5e-3;
     auto ps = randomCloud(600, side, radius, 4242);
@@ -72,18 +72,18 @@ TEST(CellList, EncuentraTodosLosParesDentroDelRadioDeCorte) {
     EXPECT_GT(expected, 0u);
 }
 
-TEST(CellList, ElTamanoDeCeldaCubreElDiametroMaximo) {
+TEST(CellList, CellSizeCoversTheMaximumDiameter) {
     EXPECT_NEAR(physics::CellList::suggestCellSize(1e-3), 2e-3 * 1.05, 1e-15);
     EXPECT_GT(physics::CellList::suggestCellSize(1e-3), 2e-3);
 }
 
-TEST(CellList, ReconstruyeLaGeometriaDeLasCeldas) {
+TEST(CellList, ReconstructsTheCellGeometry) {
     const core::Real side = 0.1;
     auto ps = randomCloud(50, side, 2e-3, 11);
     const core::Box box{{0, 0, 0}, {side, side, side}};
 
     physics::CellList cells;
-    cells.build(ps, box, 0.02);   // 5 x 5 x 5 celdas
+    cells.build(ps, box, 0.02);   // 5 x 5 x 5 cells
     EXPECT_EQ(cells.dims()[0], 5);
     EXPECT_EQ(cells.dims()[1], 5);
     EXPECT_EQ(cells.dims()[2], 5);

@@ -11,6 +11,7 @@
 # Usage:
 #   ./scripts/install.sh                     # Release build in ./build/release + tests
 #   ./scripts/install.sh --prefix ~/.local   # install prefix
+#   ./scripts/install.sh --build-dir ~/gb    # build outside the project
 #   ./scripts/install.sh --quick             # also runs the quick case
 #   ./scripts/install.sh --debug             # Debug build with verbose tests
 #   ./scripts/install.sh --omp               # enables the OpenMP backend (stage 4)
@@ -58,13 +59,13 @@ while [[ $# -gt 0 ]]; do
         --no-install) DO_INSTALL=0; shift ;;
         --no-python)  PYTHON_PKG=0; shift ;;
         -h|--help)
-            sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'
             exit 0 ;;
         *) die "unknown option: $1 (use --help)" ;;
     esac
 done
 
-# --------------------------------------------------------------- proyecto -----
+# --------------------------------------------------------------- project ------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 [[ -f "$ROOT/CMakeLists.txt" ]] || die "cannot find CMakeLists.txt in $ROOT"
@@ -72,13 +73,26 @@ BUILD_DIR="${BUILD_DIR:-$ROOT/build/$PRESET}"
 LOG_DIR="$ROOT/build/logs"
 JOBS="${JOBS:-$( (command -v nproc >/dev/null && nproc) || (command -v sysctl >/dev/null && sysctl -n hw.ncpu) || echo 4)}"
 
+# CMake cannot generate the FetchContent/ExternalProject steps of a build tree
+# whose path contains '#' or ';' (it fails with "OUTPUT containing a '#' is not
+# allowed"). Fail here with the fix, instead of deep inside the configure log.
+case "$BUILD_DIR" in
+    *[\#\;]*)
+        die "the build path contains '#' or ';', which CMake cannot handle:
+      $BUILD_DIR
+    Fix: rename the project folder without those characters, or keep the build
+    tree outside it:
+      ./scripts/install.sh --build-dir \"\$HOME/granimpact-build\""
+        ;;
+esac
+
 step "GranImpact · local installation"
-printf '    proyecto ....... %s\n' "$ROOT"
+printf '    project ........ %s\n' "$ROOT"
 printf '    build .......... %s (%s)\n' "$BUILD_DIR" "$BUILD_TYPE"
 printf '    prefix ......... %s\n' "$PREFIX"
 printf '    jobs ........... %s\n' "$JOBS"
 
-# -------------------------------------------------------------- requisitos ----
+# -------------------------------------------------------------- requirements --
 step "Checking requirements"
 need() { command -v "$1" >/dev/null 2>&1 || die "$2"; }
 need cmake "missing cmake (>= 3.20). Linux: 'sudo apt install cmake'; macOS: 'brew install cmake'"
@@ -96,7 +110,7 @@ command -v ninja >/dev/null 2>&1 && ok "ninja (faster builds)" || warn "no ninja
 # FetchContent downloads nlohmann/json and GoogleTest the first time.
 FETCH_OK=1
 if [[ -d "$BUILD_DIR/_deps" ]]; then
-    ok "dependencias ya descargadas (build existente)"
+    ok "dependencies already downloaded (existing build)"
     FETCH_OK=0
 else
     for tool in git curl; do
@@ -115,7 +129,7 @@ fi
 # ------------------------------------------------------------------ build -----
 mkdir -p "$LOG_DIR" "$BUILD_DIR"
 
-step "Configurando"
+step "Configuring"
 CMAKE_ARGS=(
     -S "$ROOT" -B "$BUILD_DIR"
     -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
@@ -151,7 +165,7 @@ else
     warn "tests skipped (--no-tests)"
 fi
 
-# --------------------------------------------------------------- instalar -----
+# --------------------------------------------------------------- install ------
 if [[ $DO_INSTALL -eq 1 ]]; then
     step "Installing into $PREFIX"
     cmake --install "$BUILD_DIR" >/dev/null
