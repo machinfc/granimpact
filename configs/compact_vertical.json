@@ -1,0 +1,23 @@
+{
+  "_comment": [
+    "Thesis replica, COMPACTED bed (target phi 0.574), vertical impact.",
+    "Compaction is done with increased gravity during settling",
+    "(settle.gravity_boost), not by changing the impact physics."
+  ],
+  "simulation": { "name": "compact_vertical", "dt": 2e-06, "t_settle": 0.25, "t_end": 0.10,
+                  "output_every": 500, "seed": 20240518 },
+  "domain": { "x": 0.45, "y": 0.45, "z": 0.25 },
+  "particles": {
+    "r_min": 0.0037, "r_max": 0.0042,
+    "rho_grain": 2650.0, "packing_fraction": 0.574, "bed_height_fraction": 0.60,
+    "young": 100000000.0, "poisson": 0.25, "restitution": 0.55, "friction": 0.50
+  },
+  "projectile": { "radius": 0.0354, "density": 1310.0, "phi": 0.50, "young": 5000000.0,
+                  "poisson": 0.20, "yield_kPa": 17.15, "speed": 2.0, "angle_deg": 90.0,
+                  "start_z": 0.20 },
+  "contact": { "tangential": true, "rolling_friction": false, "tangential_stiffness_ratio": 1.0 },
+  "settle": { "gravity_boost": 3.0, "ke_tolerance": 1e-09, "min_steps": 2000 },
+  "gravity": { "gz": -9.81 },
+  "boundaries": { "periodic_xy": false, "wall_restitution": 0.30, "fixed_bottom": true },
+  "output": { "dir": "data/outputs", "vtk": true, "csv": true, "vtk_every": 2000 }
+}
