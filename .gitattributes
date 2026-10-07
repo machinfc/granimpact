@@ -1,0 +1,10 @@
+# Keep line endings predictable: the shell scripts must stay LF so that they run
+# on Linux, macOS and WSL, and the C++/Python sources are plain text.
+* text=auto eol=lf
+
+# Binary files: never touch them
+*.png binary
+*.jpg binary
+*.pdf binary
+*.zip binary
+*.vtu binary

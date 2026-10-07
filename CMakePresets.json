@@ -1,0 +1,64 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 20, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "debug",
+      "displayName": "Debug (fast tests)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "GRANIMPACT_BUILD_TESTS": "ON",
+        "GRANIMPACT_ENABLE_SANITIZERS": "OFF"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release (production and benchmarks)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "GRANIMPACT_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "asan",
+      "displayName": "Debug + AddressSanitizer/UBSan",
+      "inherits": "debug",
+      "binaryDir": "${sourceDir}/build/asan",
+      "cacheVariables": { "GRANIMPACT_ENABLE_SANITIZERS": "ON" }
+    },
+    {
+      "name": "omp",
+      "displayName": "Release + OpenMP (stage 4)",
+      "inherits": "release",
+      "binaryDir": "${sourceDir}/build/omp",
+      "cacheVariables": { "GRANIMPACT_ENABLE_OPENMP": "ON" }
+    },
+    {
+      "name": "cuda",
+      "displayName": "Release + CUDA (stage 5)",
+      "inherits": "release",
+      "binaryDir": "${sourceDir}/build/cuda",
+      "cacheVariables": { "GRANIMPACT_ENABLE_CUDA": "ON" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "debug", "configurePreset": "debug" },
+    { "name": "release", "configurePreset": "release" },
+    { "name": "asan", "configurePreset": "asan" },
+    { "name": "omp", "configurePreset": "omp" },
+    { "name": "cuda", "configurePreset": "cuda" }
+  ],
+  "testPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "debug",
+      "output": { "outputOnFailure": true },
+      "execution": { "stopOnFailure": false }
+    },
+    { "name": "release", "configurePreset": "release", "inherits": "debug" }
+  ]
+}
