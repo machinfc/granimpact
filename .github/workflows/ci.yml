@@ -1,0 +1,107 @@
+# Continuous integration: what runs on every push and every pull request.
+#
+# Three jobs:
+#   build       builds and runs the tests on Linux (gcc) and macOS (clang), Debug
+#               and Release, with warnings as errors.
+#   python      tests the post-processing package on the supported versions.
+#   installer   runs the real install.sh and checks that the installation works.
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.os }} · ${{ matrix.preset }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        preset: [debug, release]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Install tools (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja || true
+
+      - name: Dependency cache (FetchContent)
+        uses: actions/cache@v4
+        with:
+          path: build/${{ matrix.preset }}/_deps
+          key: deps-${{ runner.os }}-${{ hashFiles('CMakeLists.txt') }}
+
+      - name: Configure
+        run: >
+          cmake -S . -B build/${{ matrix.preset }} -G Ninja
+          -DCMAKE_BUILD_TYPE=${{ matrix.preset == 'debug' && 'Debug' || 'Release' }}
+          -DGRANIMPACT_WARNINGS_AS_ERRORS=ON
+
+      - name: Build
+        run: cmake --build build/${{ matrix.preset }} -j 4
+
+      - name: Tests
+        run: ctest --test-dir build/${{ matrix.preset }} --output-on-failure -j 4
+
+      - name: Upload logs if something fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ matrix.os }}-${{ matrix.preset }}
+          path: build/${{ matrix.preset }}/Testing/Temporary/LastTest.log
+
+  python:
+    name: post-processing · Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.9', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Post-processing tests
+        run: python -m unittest discover -s python/tests -v
+      - name: Package and CLI install
+        run: |
+          pip install ./python
+          granimpact-post --help
+          python -c "
+          from granimpact_post.models import fit_power_law
+          fit = fit_power_law([0.04, 0.16, 0.64], [63.0, 75.0, 89.0])
+          assert abs(fit['b'] - 0.25) < 0.02, fit
+          print('post-proceso OK:', fit)
+          "
+
+  installer:
+    name: install.sh end to end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install
+        run: ./scripts/install.sh --prefix "$RUNNER_TEMP/gi" --jobs 4
+      - name: Check the installation
+        run: |
+          export PATH="$RUNNER_TEMP/gi/bin:$PATH"
+          granimpact --backends
+          granimpact "$PWD/configs/default.json" --out "$RUNNER_TEMP/gi/out" \
+                     --t-settle 0.002 --t-end 0.0005 --no-vtk
+          test -s "$RUNNER_TEMP/gi/out/default_summary.txt"
+          test -s "$RUNNER_TEMP/gi/out/default_crater_evolution.csv"
+      - name: Post-processing on the real output
+        run: |
+          python3 -m granimpact_post summary "$RUNNER_TEMP/gi/out/default_crater_evolution.csv"
