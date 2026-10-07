@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# GranImpact launcher: picks the best available executable and forwards the
+# arguments untouched. Once stages 4 (OpenMP) and 5 (CUDA) exist, building them is
+# enough: this script detects them with no edits.
+#
+#   granimpact configs/default.json --out data/outputs
+#   GRANIMPACT_BIN=/path/granimpact_serial granimpact ...   # force a specific one
+set -euo pipefail
+
+SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CANDIDATES=()
+
+# 1) Binary forced through the environment.
+[[ -n "${GRANIMPACT_BIN:-}" ]] && CANDIDATES+=("$GRANIMPACT_BIN")
+
+# 2) Installed next to this script (the normal case after install.sh).
+CANDIDATES+=("$SELF/granimpact_cuda" "$SELF/granimpact_openmp" "$SELF/granimpact_serial")
+
+# 3) Source tree (not installed): scripts/granimpact inside the repo.
+if [[ -d "$SELF/../build" ]]; then
+    for d in release omp cuda debug; do
+        CANDIDATES+=("$SELF/../build/$d/bin/granimpact_cuda"
+                     "$SELF/../build/$d/bin/granimpact_openmp"
+                     "$SELF/../build/$d/bin/granimpact_serial")
+    done
+fi
+
+for bin in "${CANDIDATES[@]}"; do
+    if [[ -x "$bin" ]]; then
+        # Accelerated binaries are only used if they can also run the requested
+        # backend: otherwise the binary itself warns and falls back to serial (explicit).
+        exec "$bin" "$@"
+    fi
+done
+
+cat >&2 <<'EOF'
+ERROR: no GranImpact executable found.
+Build first:       ./scripts/install.sh
+or:                cmake --preset release && cmake --build build/release -j
+EOF
+exit 127
