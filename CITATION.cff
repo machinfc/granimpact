@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use GranImpact in academic work, please cite it as below."
+title: "GranImpact: DEM simulator for granular impact craters"
+abstract: >-
+  Discrete Element Method simulator for impact craters in granular media, built as a
+  layered C++17 core with pluggable compute backends (serial today; OpenMP and CUDA
+  as interfaces). Includes bed/projectile generation, Hertz-Mindlin contact physics,
+  Velocity Verlet integration, morphological crater analysis, CSV/VTK outputs and a
+  Python post-processing package.
+type: software
+authors:
+  - family-names: "Corrales-Machín"
+    given-names: "Frank"
+    email: "frankcm.work@gmail.com"
+    orcid: "https://orcid.org/0000-0002-6980-1813"
+version: "0.3.0"
+date-released: "2026-10-02"
+license: MIT
+repository-code: "https://github.com/machinfc/granimpact"
+keywords:
+  - discrete element method
+  - granular media
+  - impact cratering
+  - scientific computing
+  - high performance computing
+  - C++
