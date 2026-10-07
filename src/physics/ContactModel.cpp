@@ -12,7 +12,6 @@ using core::Vec3;
 
 ContactModel::ContactModel(const core::SimConfig& config)
     : restitution_(config.particles.restitution),
-      friction_(config.particles.friction),
       tangential_enabled_(config.contact.tangential),
       tangential_ratio_(config.contact.tangential_stiffness_ratio) {}
 

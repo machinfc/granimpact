@@ -61,7 +61,6 @@ private:
     }
 
     Real restitution_{0};
-    Real friction_{0};
     bool tangential_enabled_{true};
     Real tangential_ratio_{1.0};
     ContactStats stats_{};

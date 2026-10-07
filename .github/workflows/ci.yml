@@ -82,8 +82,14 @@ jobs:
           granimpact-post --help
           python -c "
           from granimpact_post.models import fit_power_law
-          fit = fit_power_law([0.04, 0.16, 0.64], [63.0, 75.0, 89.0])
-          assert abs(fit['b'] - 0.25) < 0.02, fit
+          energies = [0.04, 0.16, 0.64]
+          # Synthetic data that really follow the Uehara law D = a E^(1/4):
+          # the check is that the fit recovers the exponent it was built with.
+          diameters = [100.0 * e ** 0.25 for e in energies]
+          fit = fit_power_law(energies, diameters)
+          assert abs(fit['b'] - 0.25) < 1e-6, fit
+          assert abs(fit['a'] - 100.0) < 1e-6, fit
+          assert fit['R2'] > 0.999999, fit
           print('post-processing OK:', fit)
           "
 
