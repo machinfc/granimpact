@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "granimpact-post"
+version = "0.1.0"
+description = "Post-processing of GranImpact DEM simulator results"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+plots = ["matplotlib>=3.5"]
+
+[project.scripts]
+granimpact-post = "granimpact_post.cli:main"
+
+[tool.setuptools]
+packages = ["granimpact_post"]
