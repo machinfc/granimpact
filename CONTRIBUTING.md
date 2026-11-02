@@ -1,59 +1,70 @@
-# Contributing
+# Contributing to GranImpact
 
-Thanks for your interest in GranImpact. This document describes how to build the
-project, run the tests and propose changes.
+Thank you for contributing to **GranImpact**. This document summarizes the build workflow,
+testing requirements, architectural invariants, and guidelines for adding new physics or
+parallel backends.
 
-## Build and test
+---
+
+## 1. Build & Verification Workflow
+
+### Configure, Build & Run All 7 Test Suites
 
 ```bash
-./scripts/install.sh          # dependencies, build, ctest, install
-./scripts/run_quick.sh        # end-to-end sanity check (minutes)
+cmake -S . -B build/release -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DGRANIMPACT_BUILD_TESTS=ON \
+      -DGRANIMPACT_WARNINGS_AS_ERRORS=ON
+cmake --build build/release -j$(nproc)
+ctest --test-dir build/release --output-on-failure
 ```
 
-Manual equivalent:
+### Python Post-Processing & Unit Tests
 
 ```bash
-cmake --preset release
-cmake --build --preset release -j
-ctest --preset release --output-on-failure
-```
-
-Python post-processing:
-
-```bash
-python3 -m pip install -e python/
+pip install -e ./python
 python3 -m unittest discover -s python/tests
 ```
 
-## Ground rules
+### End-to-End Smoke Run & Visualization Generation
 
-1. **No invented numbers.** Any figure in the README, `docs/` or the code comments is
-   either a measurement from a run you can reproduce or an input parameter. If it is not
-   measured, write "pending".
-2. **Determinism.** All randomness flows through the seeded `std::mt19937_64` in
-   `SimConfig`. A change that breaks bitwise reproducibility for a fixed seed must be
-   called out in the pull request.
-3. **Physics changes come with a test.** Touching `physics/` or `generation/` requires a
-   ctest case that pins the behaviour (see `tests/`).
-4. **Warning-free.** The project builds with `-Wall -Wextra -Wpedantic -Wshadow
-   -Wconversion -Wsign-conversion -Wdouble-promotion`; CI runs with
-   `-DGRANIMPACT_WARNINGS_AS_ERRORS=ON`.
-5. **Respect the layering.** `core ← physics ← backends`, `core ← generation`,
-   `core ← analysis ← io`, `sim` orchestrates. An include that crosses the layers
-   upwards is a design bug (see `docs/architecture.md`).
-6. **Keep the CSV contract.** The header line and the final `# result:` block are read by
-   `python/granimpact_post` and by `tests/test_simulation_smoke.cpp`; changing keys means
-   changing both.
+```bash
+./scripts/run_quick.sh
+python3 -m granimpact_post visualize-all \
+    data/outputs/loose/default/default_crater_evolution.csv
+```
 
-## Adding a new stage (OpenMP / CUDA)
+---
 
-The extension points are described in `docs/architecture.md` §2. In short: implement
-`ContactSolver` in `src/backends/`, register it in `CMakeLists.txt` behind its option,
-wire it into the backend factory, and add the equivalence test (same case, serial vs new
-backend, relative difference < 1e-6 on the CSV series).
+## 2. Engineering Ground Rules
 
-## Reporting bugs
+1. **No Invented Numbers**: Every metric in `README.md`, `docs/`, or code comments must be
+   either a documented input parameter or a measurement from a reproducible simulation run.
+2. **Strict Determinism**: All stochastic sampling (polydisperse grain radii and lattice
+   jitter) must flow exclusively through the seeded `std::mt19937_64` in `SimConfig`.
+3. **Physics Changes Require Unit Tests**: Any modification to `src/physics/`,
+   `src/generation/`, or `src/analysis/` must include a corresponding unit test in `tests/`
+   (e.g., `test_contact_model.cpp`, `test_crater_analysis.cpp`).
+4. **Zero Compiler Warnings**: The codebase compiles cleanly with `-Wall -Wextra -Wpedantic
+   -Wshadow -Wconversion -Wsign-conversion -Wdouble-promotion -Werror`.
+5. **Respect Module Layering**:
+   `core ← physics ← backends`, `core ← generation`, `core ← analysis ← io`, and `sim`
+   orchestrates (`docs/architecture.md`). Upward includes across layers are not permitted.
+6. **Preserve Output Contracts**:
+   - Simulation outputs are organized under `data/outputs/loose/<case>/` and
+     `data/outputs/compact/<case>/` via `SimConfig::bedRegimeFolder()`.
+   - `<case>_crater_evolution.csv`, `<case>_depth_map.csv`, `<case>_subsurface_chains.csv`,
+     and `<case>_radial_evolution.csv` are consumed by `python/granimpact_post` and
+     `tests/test_simulation_smoke.cpp`. Changing column names requires updating both C++
+     writers and Python parsers.
 
-Open an issue with: the config used (or the exact command line), the seed, the expected
-behaviour and the actual output. If it is a numerical issue, attach the CSV or the
-`# result:` line — it makes the report reproducible.
+---
+
+## 3. Adding Parallel Backends (Phase 2 OpenMP / Phase 3 CUDA)
+
+Extension points are detailed in `docs/architecture.md` and `src/backends/README.md`:
+1. Implement `ContactSolver` in `src/backends/OpenMpSolver.cpp` or `src/backends/CudaSolver.cu`.
+2. Register the solver in `src/backends/Backend.cpp` behind `GRANIMPACT_ENABLE_OPENMP` or
+   `GRANIMPACT_ENABLE_CUDA`.
+3. Add a CTest equivalence check verifying that the new backend reproduces `--backend serial`
+   within `< 10⁻⁶` relative tolerance on the CSV time series for a fixed seed.

@@ -25,3 +25,9 @@ __pycache__/
 .vscode/
 .idea/
 .DS_Store
+
+# Personal reference folder and private guides (never uploaded to GitHub)
+info/
+GUIA_LOCAL_PRIVADA.md
+*.npz
+

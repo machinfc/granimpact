@@ -2,6 +2,11 @@
 # on Linux, macOS and WSL, and the C++/Python sources are plain text.
 * text=auto eol=lf
 
+# GitHub Linguist classification
+include/**/*.h linguist-language=C
+include/**/*.hpp linguist-language=C++
+*.nb linguist-vendored
+
 # Binary files: never touch them
 *.png binary
 *.jpg binary
