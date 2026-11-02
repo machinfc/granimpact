@@ -131,6 +131,76 @@ class ResultsTest(unittest.TestCase):
         self.assertEqual(case.columns, ["t", "D"])
         self.assertEqual(case.rows, 2)
 
+    @unittest.skipUnless(importlib.util.find_spec("numpy"), "numpy not installed")
+    def test_export_craterslab_npz_writes_valid_arrays(self) -> None:
+        import numpy as np
+        from granimpact_post.results import export_craterslab_npz
+
+        dmap = self.dir / "default_depth_map.csv"
+        dmap.write_text(
+            "# GranImpact 2D ToF Surface Elevation Map | case=default nx=2 ny=2 z_ref_mm=100.0\n"
+            "ix,iy,x_mm,y_mm,z_bed_mm,z_total_mm\n"
+            "0,0,10.0,10.0,-5.0,-2.0\n"
+            "1,0,20.0,10.0,0.0,0.0\n"
+            "0,1,10.0,20.0,2.0,2.0\n"
+            "1,1,20.0,20.0,-10.0,-7.0\n",
+            encoding="utf-8",
+        )
+        npz_path = export_craterslab_npz(dmap, self.dir / "default_craterslab.npz")
+        self.assertTrue(npz_path.is_file())
+        with np.load(npz_path) as data:
+            self.assertEqual(data["dmap"].shape, (2, 2))
+            self.assertAlmostEqual(float(data["z_bed_mm"][0, 0]), -5.0)
+            self.assertAlmostEqual(float(data["z_total_mm"][0, 0]), -2.0)
+
+    @unittest.skipUnless(
+        importlib.util.find_spec("matplotlib") and importlib.util.find_spec("numpy"),
+        "matplotlib/numpy not installed",
+    )
+    def test_three_scientific_visualizations_write_files(self) -> None:
+        from granimpact_post.plots import (
+            plot_crater_formation,
+            plot_lateral_saturation,
+            plot_subsurface_chains,
+        )
+
+        dmap_csv = self.dir / "default_depth_map.csv"
+        dmap_csv.write_text(
+            "# GranImpact 2D ToF Surface Elevation Map | case=default nx=2 ny=2 z_ref_mm=100.0\n"
+            "ix,iy,x_mm,y_mm,z_bed_mm,z_total_mm\n"
+            "0,0,10.0,10.0,-5.0,-2.0\n"
+            "1,0,20.0,10.0,0.0,0.0\n"
+            "0,1,10.0,20.0,2.0,2.0\n"
+            "1,1,20.0,20.0,-10.0,-7.0\n",
+            encoding="utf-8",
+        )
+        sub_csv = self.dir / "default_subsurface_chains.csv"
+        sub_csv.write_text(
+            "t,r_m,z_m,phi_local,stress_kPa,coordination,speed_m_s\n"
+            "0.001,0.01,0.02,0.55,12.0,4.0,0.2\n"
+            "0.001,0.03,0.02,0.53,4.0,3.0,0.1\n"
+            "0.001,0.01,0.05,0.58,25.0,5.0,0.5\n"
+            "0.001,0.03,0.05,0.54,6.0,3.5,0.1\n",
+            encoding="utf-8",
+        )
+        rad_csv = self.dir / "default_radial_evolution.csv"
+        rad_csv.write_text(
+            "t,r_m,z_bed_mm,z_total_mm\n"
+            "0.001,0.005,-5.0,-3.0\n"
+            "0.001,0.015,1.0,1.0\n"
+            "0.002,0.005,-8.0,-5.0\n"
+            "0.002,0.015,3.0,3.0\n",
+            encoding="utf-8",
+        )
+        case = load_case(self.default)
+        p1 = plot_subsurface_chains(case, sub_csv, self.dir / "chains.png")
+        p2 = plot_lateral_saturation(case, self.dir / "rim.png")
+        p3 = plot_crater_formation(case, rad_csv, dmap_csv, self.dir / "formation.png")
+        self.assertTrue(p1.is_file())
+        self.assertTrue(p2.is_file())
+        self.assertTrue(p3.is_file())
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+

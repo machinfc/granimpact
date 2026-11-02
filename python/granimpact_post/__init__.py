@@ -10,7 +10,25 @@ Typical use::
     print(case.summary())
 """
 
-from .results import Case, load_case, load_many, sweep_table  # noqa: F401
+from .results import (  # noqa: F401
+    Case,
+    export_craterslab_npz,
+    load_case,
+    load_depth_map,
+    load_many,
+    load_radial_evolution,
+    load_subsurface_chains,
+    sweep_table,
+)
 
-__all__ = ["Case", "load_case", "load_many", "sweep_table"]
-__version__ = "0.1.0"
+__all__ = [
+    "Case",
+    "export_craterslab_npz",
+    "load_case",
+    "load_depth_map",
+    "load_many",
+    "load_radial_evolution",
+    "load_subsurface_chains",
+    "sweep_table",
+]
+__version__ = "0.2.0"

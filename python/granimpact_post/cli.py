@@ -7,9 +7,27 @@ import csv
 import sys
 from pathlib import Path
 
-from .results import Case, load_case, load_many, sweep_table
+from .results import (
+    Case,
+    export_craterslab_npz,
+    load_case,
+    load_many,
+    resolve_sibling_csv,
+    sweep_table,
+)
 
-SUBCOMMANDS = ("summary", "list", "sweep", "plot", "fit")
+SUBCOMMANDS = (
+    "summary",
+    "list",
+    "sweep",
+    "plot",
+    "fit",
+    "chains",
+    "rim-theory",
+    "formation",
+    "visualize-all",
+    "export-npz",
+)
 
 
 def _expand(patterns: list[str]) -> list[Path]:
@@ -114,6 +132,79 @@ def cmd_plot(args) -> int:
     return 0
 
 
+def cmd_chains(args) -> int:
+    from .plots import plot_subsurface_chains
+
+    for path in _expand(args.inputs):
+        case = load_case(path)
+        sub_csv = resolve_sibling_csv(case, "subsurface_chains")
+        target = args.out or (path.parent / f"{case.name}_force_chains.png")
+        print(f"force-chains plot written to {plot_subsurface_chains(case, sub_csv, target)}")
+    return 0
+
+
+def cmd_rim_theory(args) -> int:
+    from .plots import plot_lateral_saturation
+
+    for path in _expand(args.inputs):
+        case = load_case(path)
+        target = args.out or (path.parent / f"{case.name}_lateral_saturation.png")
+        print(f"lateral-saturation plot written to {plot_lateral_saturation(case, target)}")
+    return 0
+
+
+def cmd_formation(args) -> int:
+    from .plots import plot_crater_formation
+
+    for path in _expand(args.inputs):
+        case = load_case(path)
+        rad_csv = resolve_sibling_csv(case, "radial_evolution")
+        dmap_csv = resolve_sibling_csv(case, "depth_map")
+        target = args.out or (path.parent / f"{case.name}_crater_formation.png")
+        print(f"crater-formation plot written to {plot_crater_formation(case, rad_csv, dmap_csv, target)}")
+    return 0
+
+
+def cmd_export_npz(args) -> int:
+    for path in _expand(args.inputs):
+        dmap_csv = (
+            path
+            if path.name.endswith("_depth_map.csv")
+            else resolve_sibling_csv(path, "depth_map")
+        )
+        out_path = export_craterslab_npz(
+            dmap_csv,
+            out_npz=args.out,
+            use_total_surface=not args.bed_only,
+        )
+        print(f"craterslab .npz written to {out_path}")
+    return 0
+
+
+def cmd_visualize_all(args) -> int:
+    from .plots import (
+        plot_case,
+        plot_crater_formation,
+        plot_lateral_saturation,
+        plot_subsurface_chains,
+    )
+
+    for path in _expand(args.inputs):
+        case = load_case(path)
+        out_dir = Path(args.out_dir) if args.out_dir else path.parent
+        out_dir.mkdir(parents=True, exist_ok=True)
+        print(f"1) overview: {plot_case(case, out_dir / f'{case.name}_overview.png')}")
+        print(f"2) rim/lateral saturation: {plot_lateral_saturation(case, out_dir / f'{case.name}_lateral_saturation.png')}")
+        sub_csv = resolve_sibling_csv(case, "subsurface_chains")
+        print(f"3) subsurface force chains: {plot_subsurface_chains(case, sub_csv, out_dir / f'{case.name}_force_chains.png')}")
+        rad_csv = resolve_sibling_csv(case, "radial_evolution")
+        dmap_csv = resolve_sibling_csv(case, "depth_map")
+        print(f"4) crater formation: {plot_crater_formation(case, rad_csv, dmap_csv, out_dir / f'{case.name}_crater_formation.png')}")
+        npz_path = export_craterslab_npz(dmap_csv, out_dir / f"{case.name}_craterslab.npz")
+        print(f"5) craterslab .npz: {npz_path}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="granimpact_post",
@@ -139,6 +230,32 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("inputs", nargs="+")
     p.add_argument("-o", "--out", help="output PNG")
     p.set_defaults(func=cmd_plot)
+
+    p = sub.add_parser("chains", help="Visualization 1: 2D subsurface force chains & Heckel saturation")
+    p.add_argument("inputs", nargs="+")
+    p.add_argument("-o", "--out", help="output PNG")
+    p.set_defaults(func=cmd_chains)
+
+    p = sub.add_parser("rim-theory", help="Visualization 2: lateral opening & rim height saturation")
+    p.add_argument("inputs", nargs="+")
+    p.add_argument("-o", "--out", help="output PNG")
+    p.set_defaults(func=cmd_rim_theory)
+
+    p = sub.add_parser("formation", help="Visualization 3: radial crater formation & 2D ToF depth map")
+    p.add_argument("inputs", nargs="+")
+    p.add_argument("-o", "--out", help="output PNG")
+    p.set_defaults(func=cmd_formation)
+
+    p = sub.add_parser("export-npz", help="export 2D depth map to craterslab-compatible .npz")
+    p.add_argument("inputs", nargs="+")
+    p.add_argument("-o", "--out", help="output .npz path")
+    p.add_argument("--bed-only", action="store_true", help="export bed cavity without projectile grains")
+    p.set_defaults(func=cmd_export_npz)
+
+    p = sub.add_parser("visualize-all", help="generate all 3 scientific visualizations + craterslab .npz")
+    p.add_argument("inputs", nargs="+")
+    p.add_argument("-d", "--out-dir", help="output directory for generated plots and .npz")
+    p.set_defaults(func=cmd_visualize_all)
 
     p = sub.add_parser("fit", help="fit D(E) to the analytical models")
     p.add_argument("inputs", nargs="+")

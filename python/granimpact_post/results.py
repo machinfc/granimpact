@@ -102,6 +102,18 @@ class Case:
             values = self.finite(column)
             return max(values) if values else None
 
+        def opt_last(column: str):
+            if column not in self.data:
+                return None
+            values = self.finite(column)
+            return values[-1] if values else None
+
+        def opt_peak(column: str):
+            if column not in self.data:
+                return None
+            values = self.finite(column)
+            return max(values) if values else None
+
         classification = self.labels.get("classification", [])
         return {
             "case": self.name,
@@ -110,9 +122,14 @@ class Case:
             "D_mm": _mm(last("D")),
             "d_exc_mm": _mm(last("d_exc")),
             "h_rim_mm": _mm(last("h_rim")),
+            "h_cp_mm": _mm(opt_last("h_cp")),
+            "rim_slope": opt_last("rim_slope"),
             "epsilon": last("epsilon"),
             "Z/D": last("aspect_zd"),
             "V_in_cm3": _cm3(last("v_in")),
+            "V_exc_cm3": _cm3(opt_last("v_exc")),
+            "phi_subsurface": opt_last("phi_subsurface"),
+            "max_stress_kPa": opt_peak("max_virial_stress_kPa"),
             "class": classification[-1] if classification else None,
             "KE_max_J": peak("kinetic_energy"),
             "max_contacts": peak("contacts"),
@@ -212,14 +229,7 @@ def sweep_table(cases: Sequence[Case]) -> list[dict[str, float | str | None]]:
 
 
 def _launch_energy(case: Case) -> float | None:
-    """Launch kinetic energy of the projectile, in joules.
-
-    Order of preference:
-      1) `launch_energy_J` from the CSV footer: measured by the simulator itself;
-      2) 1/2 m v^2 with the mass recovered from the first untouched row (older
-         CSVs without that footer field). That fallback fails for settled beds,
-         where the particles already touch at t = 0.
-    """
+    """Launch kinetic energy of the projectile, in joules."""
     from .mass import projectile_mass_kg  # local import: avoids circular dependencies
 
     footer = case.meta.get("launch_energy_J")
@@ -233,3 +243,154 @@ def _launch_energy(case: Case) -> float | None:
     if mass is None or speed is None:
         return None
     return 0.5 * mass * float(speed) ** 2
+
+
+def resolve_sibling_csv(case_or_path: Case | str | Path, suffix: str) -> Path:
+    """Finds `<name>_<suffix>.csv` next to a `Case` or `<name>_crater_evolution.csv`."""
+    if isinstance(case_or_path, Case):
+        if case_or_path.path is None:
+            raise FileNotFoundError(f"Case '{case_or_path.name}' has no file path")
+        base_dir = case_or_path.path.parent
+        name = case_or_path.name
+    else:
+        p = Path(case_or_path)
+        if p.is_file() and p.name.endswith(f"_{suffix}.csv"):
+            return p
+        base_dir = p.parent
+        name = p.stem.replace("_crater_evolution", "")
+    candidate = base_dir / f"{name}_{suffix}.csv"
+    if not candidate.is_file():
+        raise FileNotFoundError(f"Companion file not found: {candidate}")
+    return candidate
+
+
+def load_depth_map(path: str | Path) -> dict:
+    """Loads `<name>_depth_map.csv` into a structured dict with 2D arrays (in mm)."""
+    path = Path(path)
+    meta: dict[str, float] = {}
+    rows: list[tuple[int, int, float, float, float, float]] = []
+    max_ix = 0
+    max_iy = 0
+    with path.open(encoding="utf-8", newline="") as handle:
+        first = handle.readline().strip()
+        if first.startswith("#"):
+            for k, v in _META_RE.findall(first):
+                num = _to_number(v)
+                if num is not None:
+                    meta[k] = num
+            header_line = handle.readline()
+        else:
+            header_line = first + "\n"
+        reader = csv.DictReader(_chain_first(header_line, handle))
+        for row in reader:
+            ix = int(row["ix"])
+            iy = int(row["iy"])
+            x_mm = float(row["x_mm"])
+            y_mm = float(row["y_mm"])
+            zb = float(row["z_bed_mm"])
+            zt = float(row["z_total_mm"])
+            max_ix = max(max_ix, ix)
+            max_iy = max(max_iy, iy)
+            rows.append((ix, iy, x_mm, y_mm, zb, zt))
+
+    nx = max_ix + 1
+    ny = max_iy + 1
+    z_bed = [[0.0 for _ in range(nx)] for _ in range(ny)]
+    z_total = [[0.0 for _ in range(nx)] for _ in range(ny)]
+    x_coords = [0.0 for _ in range(nx)]
+    y_coords = [0.0 for _ in range(ny)]
+    for ix, iy, x_mm, y_mm, zb, zt in rows:
+        z_bed[iy][ix] = zb
+        z_total[iy][ix] = zt
+        x_coords[ix] = x_mm
+        y_coords[iy] = y_mm
+
+    return {
+        "meta": meta,
+        "nx": nx,
+        "ny": ny,
+        "x_mm": x_coords,
+        "y_mm": y_coords,
+        "z_bed_mm": z_bed,
+        "z_total_mm": z_total,
+    }
+
+
+def export_craterslab_npz(
+    depth_map_csv: str | Path,
+    out_npz: str | Path | None = None,
+    use_total_surface: bool = True,
+) -> Path:
+    """Exports `<name>_depth_map.csv` to a `.npz` file compatible with `craterslab`.
+
+    `craterslab.sensors.DepthMap` loads `.npz` arrays where depth/elevation is in mm
+    along with `SensorResolution(x_res, y_res, z_res, 'mm')`.
+    """
+    try:
+        import numpy as np
+    except ImportError as exc:  # pragma: no cover
+        raise SystemExit("numpy is required to export .npz files: pip install numpy") from exc
+
+    dm = load_depth_map(depth_map_csv)
+    src_path = Path(depth_map_csv)
+    if out_npz is None:
+        stem = src_path.stem.replace("_depth_map", "")
+        out_npz = src_path.parent / f"{stem}_craterslab.npz"
+    out_path = Path(out_npz)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    surface_key = "z_total_mm" if use_total_surface else "z_bed_mm"
+    dmap = np.asarray(dm[surface_key], dtype=np.float32)
+    z_bed = np.asarray(dm["z_bed_mm"], dtype=np.float32)
+    z_tot = np.asarray(dm["z_total_mm"], dtype=np.float32)
+    dx_mm = float(dm["meta"].get("dx_mm", 2.8025))
+    dy_mm = float(dm["meta"].get("dy_mm", 2.8025))
+
+    np.savez_compressed(
+        out_path,
+        dmap=dmap,
+        z_bed_mm=z_bed,
+        z_total_mm=z_tot,
+        x_mm=np.asarray(dm["x_mm"], dtype=np.float32),
+        y_mm=np.asarray(dm["y_mm"], dtype=np.float32),
+        resolution_mm=np.asarray([dx_mm, dy_mm, 1.0], dtype=np.float32),
+    )
+    return out_path
+
+
+def load_subsurface_chains(path: str | Path) -> dict[float, list[dict[str, float]]]:
+    """Loads `<name>_subsurface_chains.csv` grouped by snapshot time `t`."""
+    snapshots: dict[float, list[dict[str, float]]] = {}
+    with Path(path).open(encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            t = round(float(row["t"]), 8)
+            snapshots.setdefault(t, []).append(
+                {
+                    "r_m": float(row["r_m"]),
+                    "z_m": float(row["z_m"]),
+                    "phi_local": float(row["phi_local"]),
+                    "stress_kPa": float(row["stress_kPa"]),
+                    "coordination": float(row["coordination"]),
+                    "speed_m_s": float(row["speed_m_s"]),
+                }
+            )
+    return snapshots
+
+
+def load_radial_evolution(path: str | Path) -> dict[float, list[dict[str, float]]]:
+    """Loads `<name>_radial_evolution.csv` grouped by snapshot time `t`."""
+    snapshots: dict[float, list[dict[str, float]]] = {}
+    with Path(path).open(encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            t = round(float(row["t"]), 8)
+            snapshots.setdefault(t, []).append(
+                {
+                    "r_m": float(row["r_m"]),
+                    "z_bed_mm": float(row["z_bed_mm"]),
+                    "z_total_mm": float(row["z_total_mm"]),
+                }
+            )
+    return snapshots
+
