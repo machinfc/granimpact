@@ -42,15 +42,23 @@ def case_name(speed: float) -> str:
     return f"energy_sweep_v{speed:g}".replace(".", "p")
 
 
-def run_case(binary: Path, speed: float, extra: list[str], verbose: bool) -> dict:
+def run_case(binary: Path, speed: float, extra: list[str], verbose: bool, regime: str = "loose") -> dict:
     name = case_name(speed)
-    out_dir = ROOT / "data" / "outputs" / name
+    out_dir = ROOT / "data" / "outputs" / regime / name
     out_dir.mkdir(parents=True, exist_ok=True)
     cmd = [str(binary), str(CONFIG), "--out", str(out_dir), "--name", name,
            "--speed", f"{speed:g}", *extra]
     start = time.time()
     result = subprocess.run(cmd, capture_output=True, text=True)
     elapsed = time.time() - start
+    if result.returncode == 0:
+        dmap_csv = out_dir / f"{name}_depth_map.csv"
+        if dmap_csv.is_file():
+            try:
+                from granimpact_post.results import export_craterslab_npz
+                export_craterslab_npz(dmap_csv, out_dir / f"{name}_craterslab.npz")
+            except Exception:
+                pass
     if verbose and result.stdout:
         print(result.stdout)
     if result.returncode != 0:
@@ -88,11 +96,11 @@ def main() -> int:
     print(f"Binary  : {binary}")
     print(f"Config  : {CONFIG}")
     print(f"Cases   : {len(speeds)} -> {', '.join(f'{v:g} m/s' for v in speeds)}")
-    print(f"Outputs : {ROOT / 'data' / 'outputs'}")
+    print(f"Outputs : {ROOT / 'data' / 'outputs' / 'loose'}")
 
     if args.dry_run:
         for speed in speeds:
-            out_dir = ROOT / "data" / "outputs" / case_name(speed)
+            out_dir = ROOT / "data" / "outputs" / "loose" / case_name(speed)
             print("  " + " ".join([str(binary), str(CONFIG), "--out", str(out_dir),
                                    "--name", case_name(speed), "--speed", f"{speed:g}", *extra]))
         return 0

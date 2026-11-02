@@ -38,7 +38,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 if [[ ${#CASES[@]} -eq 0 ]]; then
-    CASES=(default loose_vertical compact_vertical loose_oblique45 lunar_impact energy_sweep)
+    CASES=(default loose_vertical compact_vertical loose_oblique45 compact_oblique45 lunar_impact lunar_oblique45 energy_sweep)
 fi
 
 printf 'Binary: %s\n' "$BIN"
@@ -46,11 +46,19 @@ failed=()
 for case_name in "${CASES[@]}"; do
     cfg="$ROOT/configs/$case_name.json"
     [[ -f "$cfg" ]] || { echo " ! $cfg does not exist"; failed+=("$case_name"); continue; }
-    out="$ROOT/data/outputs/$case_name"
+    regime="loose"
+    if [[ "$case_name" == *compact* ]]; then
+        regime="compact"
+    fi
+    out="$ROOT/data/outputs/$regime/$case_name"
     mkdir -p "$out"
-    printf '\n=== %s -> %s ===\n' "$case_name" "$out"
+    printf '\n=== %s (%s) -> %s ===\n' "$case_name" "$regime" "$out"
     start=$SECONDS
     if "$BIN" "$cfg" --out "$out" "${EXTRA[@]}"; then
+        if [[ -f "$out/${case_name}_depth_map.csv" ]]; then
+            PYTHONPATH="$ROOT/python${PYTHONPATH:+:$PYTHONPATH}" python3 -m granimpact_post export-npz \
+                "$out/${case_name}_depth_map.csv" -o "$out/${case_name}_craterslab.npz" || true
+        fi
         printf '    (%d s)\n' "$((SECONDS - start))"
     else
         echo " ! failed"
@@ -60,9 +68,11 @@ done
 
 printf '\n=== Summary ===\n'
 for case_name in "${CASES[@]}"; do
-    summary="$ROOT/data/outputs/$case_name/${case_name}_summary.txt"
+    regime="loose"
+    [[ "$case_name" == *compact* ]] && regime="compact"
+    summary="$ROOT/data/outputs/$regime/$case_name/${case_name}_summary.txt"
     if [[ -f "$summary" ]]; then
-        printf '%-16s %s\n' "$case_name" "$(grep -E '^  (D \(diameter\)|d_exc)' "$summary" | tr '\n' ' ' | tr -s ' ')"
+        printf '%-24s [%-7s] %s\n' "$case_name" "$regime" "$(grep -E '^  (D \(diameter\)|d_exc)' "$summary" | tr '\n' ' ' | tr -s ' ')"
     fi
 done
 [[ ${#failed[@]} -eq 0 ]] && echo "All cases finished." || { echo "Failed: ${failed[*]}"; exit 1; }

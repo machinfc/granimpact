@@ -13,4 +13,10 @@ for c in "$BUILD_ROOT/release/bin/granimpact_serial" "$BUILD_ROOT/debug/bin/gran
     [[ -x "$c" ]] && BIN="$c" && break
 done
 [[ -n "$BIN" ]] || { echo "ERROR: build first with ./scripts/install.sh" >&2; exit 127; }
-exec "$BIN" "$ROOT/configs/default.json" --out "$ROOT/data/outputs" "$@"
+OUT_DIR="$ROOT/data/outputs/loose/default"
+mkdir -p "$OUT_DIR"
+"$BIN" "$ROOT/configs/default.json" --out "$OUT_DIR" "$@"
+if [[ -f "$OUT_DIR/default_depth_map.csv" ]]; then
+    PYTHONPATH="$ROOT/python${PYTHONPATH:+:$PYTHONPATH}" python3 -m granimpact_post visualize-all \
+        "$OUT_DIR/default_crater_evolution.csv" -d "$OUT_DIR"
+fi
