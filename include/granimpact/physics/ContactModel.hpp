@@ -81,7 +81,6 @@ private:
     void ensureCapacity(std::size_t n_particles);
     ContactSlot* findOrInsertSlot(std::size_t i, core::Index j, bool create_if_missing);
 
-    Real restitution_{0};
     Real damping_factor_{0};              // precomputed -2 ln(e) / sqrt(pi^2 + ln^2(e))
     bool tangential_enabled_{true};
     bool rolling_friction_enabled_{false};

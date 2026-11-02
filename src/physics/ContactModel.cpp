@@ -23,8 +23,7 @@ Real computeDampingFactor(Real restitution) {
 }  // namespace
 
 ContactModel::ContactModel(const core::SimConfig& config)
-    : restitution_(config.particles.restitution),
-      damping_factor_(computeDampingFactor(config.particles.restitution)),
+    : damping_factor_(computeDampingFactor(config.particles.restitution)),
       tangential_enabled_(config.contact.tangential),
       rolling_friction_enabled_(config.contact.rolling_friction),
       rolling_mu_(config.contact.rolling_friction_coeff),
