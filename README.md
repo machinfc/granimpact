@@ -46,17 +46,20 @@ granimpact/
 | :--- | :--- | :--- |
 | **C++17 Compiler** | `g++ ≥ 9` or `clang++ ≥ 10` | Compiles `granimpact_core` and `granimpact_serial` with `-O3`. |
 | **CMake & Ninja** | `cmake ≥ 3.16`, `ninja` | Build system and `FetchContent` for `nlohmann_json` & `googletest`. |
-| **Python 3** | `python ≥ 3.10`, `numpy`, `matplotlib` | Runs `granimpact_post` plots and `craterslab` `.npz` export. |
+| **Python 3** | `python ≥ 3.12` (`.venv`), `numpy`, `matplotlib` | Runs `granimpact_post` plots and `craterslab` `.npz` export. |
 | **ParaView** *(optional)* | `paraview ≥ 5.10` | Interactive 3D visualization of `.pvd` / `.vtu` particle & stress fields. |
 
-### 2.2. Configure, Build & Install
+### 2.2. Configure, Build & Install (Isolated `.venv`)
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e "./python[plots]"
+
 cmake -B build/release -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
       -DGRANIMPACT_WARNINGS_AS_ERRORS=ON
 cmake --build build/release -j$(nproc)
-pip install -e ./python
 ```
 
 ### 2.3. Run Canonical Scenarios & Generate Visualizations / `.npz`

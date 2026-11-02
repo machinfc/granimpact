@@ -68,19 +68,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ['3.9', '3.12']
+        python: ['3.12']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - name: Post-processing tests
-        run: python -m unittest discover -s python/tests -v
-      - name: Package and CLI install
+      - name: Create isolated project virtualenv (.venv) and install package
         run: |
-          pip install ./python
-          granimpact-post --help
-          python -c "
+          python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/pip install -e "./python[plots]"
+          .venv/bin/granimpact-post --help
+      - name: Post-processing unit tests & D(E) fit check (inside .venv)
+        run: |
+          .venv/bin/python -m unittest discover -s python/tests -v
+          .venv/bin/python -c "
           from granimpact_post.models import fit_power_law
           energies = [0.04, 0.16, 0.64]
           # Synthetic data that really follow the Uehara law D = a E^(1/4):
@@ -98,6 +101,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Install
         run: ./scripts/install.sh --prefix "$RUNNER_TEMP/gi" --jobs 4
       - name: Check the installation
@@ -108,6 +114,6 @@ jobs:
                      --t-settle 0.002 --t-end 0.0005 --no-vtk
           test -s "$RUNNER_TEMP/gi/out/default_summary.txt"
           test -s "$RUNNER_TEMP/gi/out/default_crater_evolution.csv"
-      - name: Post-processing on the real output
+      - name: Post-processing on the real output (inside isolated .venv)
         run: |
-          python3 -m granimpact_post summary "$RUNNER_TEMP/gi/out/default_crater_evolution.csv"
+          "$PWD/.venv/bin/python" -m granimpact_post summary "$RUNNER_TEMP/gi/out/default_crater_evolution.csv"

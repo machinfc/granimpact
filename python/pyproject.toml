@@ -6,11 +6,11 @@ build-backend = "setuptools.build_meta"
 name = "granimpact-post"
 version = "0.1.0"
 description = "Post-processing of GranImpact DEM simulator results"
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 dependencies = []
 
 [project.optional-dependencies]
-plots = ["matplotlib>=3.5"]
+plots = ["numpy>=1.26", "matplotlib>=3.8"]
 
 [project.scripts]
 granimpact-post = "granimpact_post.cli:main"

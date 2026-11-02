@@ -9,12 +9,14 @@ scaling laws, and exports 2D elevation maps to `.npz` files directly compatible 
 
 ---
 
-## 1. Installation & Usage
+## 1. Installation & Usage (Isolated `.venv`)
 
-Install in editable mode from the repository root (or run directly with `PYTHONPATH=python`):
+Create and activate the project-local Python 3.12 virtual environment (`.venv`) from the repository root:
 
 ```bash
-pip install -e ./python
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e "./python[plots]"
 ```
 
 ### Generate All 3 Scientific Visualizations + `craterslab` `.npz` (`visualize-all`)

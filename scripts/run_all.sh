@@ -56,7 +56,9 @@ for case_name in "${CASES[@]}"; do
     start=$SECONDS
     if "$BIN" "$cfg" --out "$out" "${EXTRA[@]}"; then
         if [[ -f "$out/${case_name}_depth_map.csv" ]]; then
-            PYTHONPATH="$ROOT/python${PYTHONPATH:+:$PYTHONPATH}" python3 -m granimpact_post export-npz \
+            PY_BIN="$ROOT/.venv/bin/python"
+            [[ -x "$PY_BIN" ]] || PY_BIN="python3"
+            PYTHONPATH="$ROOT/python${PYTHONPATH:+:$PYTHONPATH}" "$PY_BIN" -m granimpact_post export-npz \
                 "$out/${case_name}_depth_map.csv" -o "$out/${case_name}_craterslab.npz" || true
         fi
         printf '    (%d s)\n' "$((SECONDS - start))"

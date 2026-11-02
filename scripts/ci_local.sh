@@ -71,16 +71,21 @@ for preset in debug release; do
 done
 
 # ------------------------------------------------------------------ python ----
-step "python · post-processing tests"
-if command -v python3 >/dev/null 2>&1; then
-    if PYTHONPATH="$ROOT/python" python3 -m unittest discover -s "$ROOT/python/tests" >"$WORK/python-tests.log" 2>&1; then
+step "python · isolated .venv & post-processing tests"
+PY_BIN="$ROOT/.venv/bin/python"
+if [[ ! -x "$PY_BIN" ]] && command -v python3 >/dev/null 2>&1; then
+    python3 -m venv "$ROOT/.venv"
+    "$ROOT/.venv/bin/pip" install --quiet -e "$ROOT/python" || true
+fi
+if [[ -x "$PY_BIN" ]]; then
+    if PYTHONPATH="$ROOT/python" "$PY_BIN" -m unittest discover -s "$ROOT/python/tests" >"$WORK/python-tests.log" 2>&1; then
         ok
     else
         tail -15 "$WORK/python-tests.log"
         fail "python · unit tests"
     fi
     step "python · D(E) fit check"
-    if PYTHONPATH="$ROOT/python" python3 -c "
+    if PYTHONPATH="$ROOT/python" "$PY_BIN" -c "
 from granimpact_post.models import fit_power_law
 energies = [0.04, 0.16, 0.64]
 diameters = [100.0 * e ** 0.25 for e in energies]
@@ -113,7 +118,7 @@ else
            && granimpact "$ROOT/configs/default.json" --out "$OUT" \
                      --t-settle 0.002 --t-end 0.0005 --no-vtk >"$WORK/installer-run.log" 2>&1 \
            && [[ -s "$OUT/default_summary.txt" && -s "$OUT/default_crater_evolution.csv" ]] \
-           && PYTHONPATH="$ROOT/python" python3 -m granimpact_post summary "$OUT/default_crater_evolution.csv" >/dev/null 2>&1; then
+           && PYTHONPATH="$ROOT/python" "$ROOT/.venv/bin/python" -m granimpact_post summary "$OUT/default_crater_evolution.csv" >/dev/null 2>&1; then
             ok
         else
             tail -10 "$WORK/installer-run.log" || true

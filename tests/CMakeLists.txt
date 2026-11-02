@@ -32,8 +32,16 @@ granimpact_add_test(test_crater_analysis)
 granimpact_add_test(test_simulation_smoke)
 
 # ------------------------------------------------------------------- python ----
-# Post-processing is tested too: these are the same CSVs the simulator produces.
-find_package(Python3 COMPONENTS Interpreter QUIET)
+# Post-processing is tested too: prefer the project's isolated .venv if present.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../.venv/bin/python")
+    set(Python3_EXECUTABLE "${CMAKE_CURRENT_SOURCE_DIR}/../.venv/bin/python")
+    set(Python3_Interpreter_FOUND TRUE)
+else()
+    find_package(Python3 3.12 COMPONENTS Interpreter QUIET)
+    if(NOT Python3_Interpreter_FOUND)
+        find_package(Python3 COMPONENTS Interpreter QUIET)
+    endif()
+endif()
 if(Python3_Interpreter_FOUND)
     add_test(NAME test_postprocess
              COMMAND ${Python3_EXECUTABLE} -m unittest discover -s python/tests -v

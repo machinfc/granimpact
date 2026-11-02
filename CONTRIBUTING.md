@@ -19,10 +19,12 @@ cmake --build build/release -j$(nproc)
 ctest --test-dir build/release --output-on-failure
 ```
 
-### Python Post-Processing & Unit Tests
+### Python Post-Processing & Unit Tests (Isolated `.venv`)
 
 ```bash
-pip install -e ./python
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e "./python[plots]"
 python3 -m unittest discover -s python/tests
 ```
 

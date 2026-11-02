@@ -16,7 +16,9 @@ done
 OUT_DIR="$ROOT/data/outputs/loose/default"
 mkdir -p "$OUT_DIR"
 "$BIN" "$ROOT/configs/default.json" --out "$OUT_DIR" "$@"
+PY_BIN="$ROOT/.venv/bin/python"
+[[ -x "$PY_BIN" ]] || PY_BIN="python3"
 if [[ -f "$OUT_DIR/default_depth_map.csv" ]]; then
-    PYTHONPATH="$ROOT/python${PYTHONPATH:+:$PYTHONPATH}" python3 -m granimpact_post visualize-all \
+    PYTHONPATH="$ROOT/python${PYTHONPATH:+:$PYTHONPATH}" "$PY_BIN" -m granimpact_post visualize-all \
         "$OUT_DIR/default_crater_evolution.csv" -d "$OUT_DIR"
 fi

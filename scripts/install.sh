@@ -175,18 +175,30 @@ else
 fi
 
 # ------------------------------------------------------------------ python ----
+VENV_DIR="${GRANIMPACT_VENV:-$ROOT/.venv}"
 if [[ $PYTHON_PKG -eq 1 ]]; then
+    step "Setting up isolated Python virtual environment ($VENV_DIR)"
     if command -v python3 >/dev/null 2>&1; then
-        if python3 -c "import matplotlib" >/dev/null 2>&1; then
-            ok "python3 $(python3 -c 'import platform;print(platform.python_version())') with matplotlib (plots available)"
-        else
-            warn "python3 without matplotlib: post-processing works, plots do not ('pip install matplotlib')"
+        if [[ ! -x "$VENV_DIR/bin/python" ]]; then
+            python3 -m venv "$VENV_DIR" || die "failed to create virtualenv at $VENV_DIR (Linux: 'sudo apt install python3-venv')"
         fi
-        if command -v pip3 >/dev/null 2>&1 && [[ $DO_INSTALL -eq 1 ]]; then
-            if pip3 install --quiet --user "$ROOT/python" >/dev/null 2>&1; then
-                ok "post-processing package installed (python3 -m granimpact_post --help)"
+        ok "virtualenv ready: $("$VENV_DIR/bin/python" --version)"
+        if "$VENV_DIR/bin/pip" install --quiet --no-build-isolation -e "$ROOT/python" >/dev/null 2>&1 \
+           || "$VENV_DIR/bin/pip" install --quiet -e "$ROOT/python" >/dev/null 2>&1; then
+            ok "granimpact_post installed in isolated .venv ($VENV_DIR/bin/granimpact-post)"
+            if [[ $DO_INSTALL -eq 1 && -d "$PREFIX/bin" ]]; then
+                ln -sf "$VENV_DIR/bin/granimpact-post" "$PREFIX/bin/granimpact-post" || true
+            fi
+        else
+            warn "could not pip-install granimpact_post into $VENV_DIR; use PYTHONPATH=$ROOT/python"
+        fi
+        if "$VENV_DIR/bin/python" -c "import numpy, matplotlib" >/dev/null 2>&1; then
+            ok "numpy + matplotlib available in .venv (plots & .npz export ready)"
+        else
+            if "$VENV_DIR/bin/pip" install --quiet numpy matplotlib >/dev/null 2>&1; then
+                ok "installed numpy + matplotlib into .venv"
             else
-                warn "could not install the package with pip; use PYTHONPATH=$ROOT/python"
+                warn ".venv without numpy/matplotlib: run '$VENV_DIR/bin/pip install -e ./python[plots]' when online"
             fi
         fi
     else
