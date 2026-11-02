@@ -23,7 +23,8 @@ public:
     // Safe cell size: it must be >= 2*r_max so that no contact is missed.
     static Real suggestCellSize(Real max_radius, Real safety = 1.05);
 
-    void build(const core::ParticleSystem& particles, const core::Box& box, Real cell_size);
+    void build(const core::ParticleSystem& particles, const core::Box& box, Real cell_size,
+               bool periodic_xy = false);
 
     // Walks every candidate pair (i<j) exactly once.
     template <typename Fn>
@@ -33,18 +34,35 @@ public:
                 for (int cx = 0; cx < dims_[0]; ++cx) {
                     const std::uint32_t c = index(cx, cy, cz);
                     for (const Offset& o : halfOffsets()) {
-                        const int nx = cx + o[0], ny = cy + o[1], nz = cz + o[2];
-                        if (!inside(nx, ny, nz)) continue;
-                        const std::uint32_t n = index(nx, ny, nz);
-                        if (n < c) continue;                 // only half the neighbourhood
-                        for (std::uint32_t a = begin(c); a < begin(c + 1); ++a) {
-                            const std::uint32_t b0 = (n == c) ? a + 1 : begin(n);
-                            for (std::uint32_t b = b0; b < begin(n + 1); ++b) {
-                                // The pair is always emitted as (lower, higher): the
-                                // contract is explicit for whoever consumes pairs.
-                                const core::Index pi = ordered_[a];
-                                const core::Index pj = ordered_[b];
-                                if (pi < pj) fn(pi, pj); else fn(pj, pi);
+                        int nx = cx + o[0], ny = cy + o[1], nz = cz + o[2];
+                        if (!periodic_xy_) {
+                            if (!inside(nx, ny, nz)) continue;
+                            const std::uint32_t n = index(nx, ny, nz);
+                            if (n < c) continue;                 // only half the neighbourhood
+                            for (std::uint32_t a = begin(c); a < begin(c + 1); ++a) {
+                                const std::uint32_t b0 = (n == c) ? a + 1 : begin(n);
+                                for (std::uint32_t b = b0; b < begin(n + 1); ++b) {
+                                    const core::Index pi = ordered_[a];
+                                    const core::Index pj = ordered_[b];
+                                    if (pi < pj) fn(pi, pj); else fn(pj, pi);
+                                }
+                            }
+                        } else {
+                            if (nz < 0 || nz >= dims_[2]) continue;
+                            if (dims_[0] < 3 && o[0] < 0) continue;
+                            if (dims_[1] < 3 && o[1] < 0) continue;
+                            if (dims_[0] == 1 && o[0] != 0) continue;
+                            if (dims_[1] == 1 && o[1] != 0) continue;
+                            nx = (nx + dims_[0]) % dims_[0];
+                            ny = (ny + dims_[1]) % dims_[1];
+                            const std::uint32_t n = index(nx, ny, nz);
+                            for (std::uint32_t a = begin(c); a < begin(c + 1); ++a) {
+                                const std::uint32_t b0 = (n == c) ? a + 1 : begin(n);
+                                for (std::uint32_t b = b0; b < begin(n + 1); ++b) {
+                                    const core::Index pi = ordered_[a];
+                                    const core::Index pj = ordered_[b];
+                                    if (pi < pj) fn(pi, pj); else fn(pj, pi);
+                                }
                             }
                         }
                     }
@@ -76,9 +94,12 @@ private:
     core::Vec3 origin_{};
     core::Vec3 inv_cell_{};
     std::array<int, 3> dims_{1, 1, 1};
+    bool periodic_xy_{false};
     std::vector<std::uint32_t> cell_start_;   // CSR: start of each cell
     std::vector<core::Index> ordered_;        // indices grouped by cell
     std::vector<std::uint32_t> counts_;
+    std::vector<std::uint32_t> cell_of_;      // reusable per-particle cell index buffer
+    std::vector<std::uint32_t> cursor_;       // reusable CSR write cursor buffer
 };
 
 }  // namespace granimpact::physics

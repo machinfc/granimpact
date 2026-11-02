@@ -16,11 +16,15 @@ VelocityVerlet::VelocityVerlet(const core::ParticleSystem& particles, Real dt, R
 
 void VelocityVerlet::firstHalfKick(core::ParticleSystem& particles) const {
     auto& vel = particles.velocity();
-    const auto& acc = particles.force();
+    auto& omega = particles.omega();
+    const auto& force = particles.force();
+    const auto& torque = particles.torque();
     const auto& inv_m = particles.invMass();
+    const auto& inv_i = particles.invInertia();
     const Real half = Real(0.5) * dt_;
     for (std::size_t i = 0; i < particles.size(); ++i) {
-        vel[i] += acc[i] * (inv_m[i] * half);
+        vel[i] += force[i] * (inv_m[i] * half);
+        omega[i] += torque[i] * (inv_i[i] * half);
     }
 }
 
@@ -33,7 +37,7 @@ void VelocityVerlet::drift(core::ParticleSystem& particles) const {
 }
 
 void VelocityVerlet::secondHalfKick(core::ParticleSystem& particles) const {
-    firstHalfKick(particles);   // symmetric: v += a dt/2 with the new forces
+    firstHalfKick(particles);   // symmetric: v += a dt/2, omega += alpha dt/2 with new forces/torques
 }
 
 void VelocityVerlet::freeStep(core::ParticleSystem& particles) const {
@@ -55,26 +59,32 @@ void applyBoundaries(core::ParticleSystem& particles, const core::Box& box,
                      const core::SimConfig& config) {
     auto& pos = particles.position();
     auto& vel = particles.velocity();
+    auto& omega = particles.omega();
     auto& kinds = particles.kind();
     const auto& rad = particles.radius();
     const Real e_wall = config.boundaries.wall_restitution;
-    const Real mu_wall = config.particles.friction;
+    const Real e_side = e_wall * (Real(1.0) - config.boundaries.wall_damping);
+    const Real mu_wall = config.boundaries.wall_friction;
+    const Real tang_decay = std::clamp(Real(1.0) - mu_wall * Real(0.15), Real(0.0), Real(1.0));
+    const Real rot_decay = std::clamp(Real(1.0) - mu_wall * Real(0.10), Real(0.0), Real(1.0));
 
     for (std::size_t i = 0; i < particles.size(); ++i) {
         const Real r = rad[i];
-        // Rigid floor at z=0
+        // Rigid floor at z = box.min.z
         if (config.boundaries.fixed_bottom && pos[i].z - r < box.min.z) {
             pos[i].z = box.min.z + r;
             if (vel[i].z < 0) {
                 vel[i].z = -e_wall * vel[i].z;
-                vel[i].x *= (1.0 - mu_wall * 0.1);   // tangential loss to friction
-                vel[i].y *= (1.0 - mu_wall * 0.1);
+                vel[i].x *= tang_decay;
+                vel[i].y *= tang_decay;
+                omega[i] *= rot_decay;
             }
         }
-        // Side walls: periodic or rigid
+        // Side walls: periodic or rigid with optional acoustic damping and Coulomb friction
         for (int axis = 0; axis < 2; ++axis) {
             Real& p = (axis == 0) ? pos[i].x : pos[i].y;
             Real& v = (axis == 0) ? vel[i].x : vel[i].y;
+            Real& vt1 = (axis == 0) ? vel[i].y : vel[i].x;
             const Real lo = (axis == 0) ? box.min.x : box.min.y;
             const Real hi = (axis == 0) ? box.max.x : box.max.y;
             const Real length = hi - lo;
@@ -83,8 +93,23 @@ void applyBoundaries(core::ParticleSystem& particles, const core::Box& box,
                 if (p < lo) p += length;
                 else if (p >= hi) p -= length;
             } else {
-                if (p - r < lo) { p = lo + r; if (v < 0) v = -e_wall * v; }
-                else if (p + r > hi) { p = hi - r; if (v > 0) v = -e_wall * v; }
+                if (p - r < lo) {
+                    p = lo + r;
+                    if (v < 0) {
+                        v = -e_side * v;
+                        vt1 *= tang_decay;
+                        vel[i].z *= tang_decay;
+                        omega[i] *= rot_decay;
+                    }
+                } else if (p + r > hi) {
+                    p = hi - r;
+                    if (v > 0) {
+                        v = -e_side * v;
+                        vt1 *= tang_decay;
+                        vel[i].z *= tang_decay;
+                        omega[i] *= rot_decay;
+                    }
+                }
             }
         }
         // No ceiling: ejecta may escape the domain (correct physics for the

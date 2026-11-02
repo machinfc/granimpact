@@ -105,6 +105,14 @@ endif()
 add_executable(granimpact_serial src/apps/main_serial.cpp)
 target_link_libraries(granimpact_serial PRIVATE granimpact_core)
 target_compile_options(granimpact_serial PRIVATE ${GRANIMPACT_WARNINGS})
+add_custom_command(TARGET granimpact_serial POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E create_symlink
+            "$<TARGET_FILE_NAME:granimpact_serial>"
+            "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/granimpact"
+    COMMAND ${CMAKE_COMMAND} -E create_symlink
+            "bin/$<TARGET_FILE_NAME:granimpact_serial>"
+            "${CMAKE_BINARY_DIR}/granimpact"
+    COMMENT "Creating convenience symlinks build/release/bin/granimpact and build/release/granimpact")
 
 # The accelerated executables are added here once they exist (stages 4-5):
 # if(GRANIMPACT_ENABLE_OPENMP) add_executable(granimpact_openmp src/apps/main_openmp.cpp) ... endif()

@@ -85,17 +85,42 @@ io::StepRecord Simulation::step(io::StepRecord record, bool measure_crater, Real
     // 2) forces at the new position
     particles_.clearForces();
     particles_.applyGravity(gz);
+    if (settling_phase_ && config_.settle.compaction_pressure_kPa > 0 && !particles_.empty()) {
+        // Uniaxial compaction pressure on the top layer (models the 92 kg metallic lid, ~4.46 kPa).
+        Real z_max = box.min.z;
+        for (std::size_t i = 0; i < particles_.size(); ++i) {
+            if (particles_.kind()[i] == ParticleKind::Bed) {
+                z_max = std::max(z_max, particles_.position()[i].z);
+            }
+        }
+        const Real top_band = z_max - Real(2.5) * config_.particles.r_max;
+        std::size_t n_top = 0;
+        for (std::size_t i = 0; i < particles_.size(); ++i) {
+            if (particles_.kind()[i] == ParticleKind::Bed && particles_.position()[i].z >= top_band) {
+                ++n_top;
+            }
+        }
+        if (n_top > 0) {
+            const Real total_lid_force = config_.settle.compaction_pressure_kPa * Real(1000.0)
+                                         * box.size().x * box.size().y;
+            const Real force_per_grain = total_lid_force / static_cast<Real>(n_top);
+            for (std::size_t i = 0; i < particles_.size(); ++i) {
+                if (particles_.kind()[i] == ParticleKind::Bed && particles_.position()[i].z >= top_band) {
+                    particles_.force()[i].z -= force_per_grain;
+                }
+            }
+        }
+    }
+
     const Real cell_size = physics::CellList::suggestCellSize(particles_.maxRadius());
-    cells_.build(particles_, box, cell_size);
+    cells_.build(particles_, box, cell_size, config_.boundaries.periodic_xy);
     const auto stats = solver_->computeForces(particles_, cells_, config_.simulation.dt);
 
     // 3) second half of the kick
     integrator.secondHalfKick(particles_);
 
     // Impact velocity: measured when the projectile centre of mass reaches the
-    // bed surface (geometric criterion). Using contacts does not work, because
-    // during settling and the impact phase itself there are grain-grain contacts
-    // that have nothing to do with the projectile.
+    // bed surface (geometric criterion).
     if (!first_contact_seen_ && analyzer_.hasReference() && z_surface_ > 0) {
         const Real com = projectileComZ(particles_);
         if (com > 0 && com - config_.projectile.radius
@@ -110,9 +135,16 @@ io::StepRecord Simulation::step(io::StepRecord record, bool measure_crater, Real
     record.contacts = stats.touching;
     record.kinetic_energy = particles_.kineticEnergy();
     record.potential_energy = particles_.gravitationalPotentialEnergy(gz);
+    record.rotational_energy = particles_.rotationalKineticEnergy();
+    record.dissipated_energy = static_cast<Real>(stats.dissipated_energy);
+    record.active_bonds = stats.active_bonds;
+    record.broken_bonds = stats.broken_bonds;
     record.max_speed = particles_.maxSpeed();
     if (measure_crater) {
         record.crater = analyzer_.analyze(particles_, impact_energy_);
+        record.crater.dissipated_energy = record.dissipated_energy;
+        record.crater.active_bonds = record.active_bonds;
+        record.crater.broken_bonds = record.broken_bonds;
         record.has_crater = true;
     }
     return record;
@@ -152,16 +184,15 @@ SimulationResult Simulation::run(std::ostream& log) {
         << (config_.settle.gravity_boost != 1.0
                 ? "  (gravity x" + std::to_string(config_.settle.gravity_boost) + ")"
                 : "")
+        << (config_.settle.compaction_pressure_kPa > 0.0
+                ? "  (lid " + std::to_string(config_.settle.compaction_pressure_kPa) + " kPa)"
+                : "")
         << " (cut by energy convergence)\n";
 
     io::StepRecord record;
     const std::uint64_t check_every = std::max<std::uint64_t>(settle_steps / 200, 1);
     std::uint64_t used_steps = 0;
     bool converged = false;
-    // Convergence criterion on the bed HEIGHT, not only on kinetic energy:
-    // a bed can have Ek ~ 0 and still creep (filling gaps of the initial
-    // packing). Cutting there makes that subsidence show up later as a false
-    // "crater". The criterion requires the mean height to stop changing.
     const Real damping = config_.settle.velocity_damping;
     const auto meanBedHeight = [&]() {
         Real sum = 0;
@@ -174,6 +205,7 @@ SimulationResult Simulation::run(std::ostream& log) {
         return n > 0 ? sum / static_cast<Real>(n) : 0;
     };
 
+    settling_phase_ = true;
     Real height_prev = particles_.empty() ? 0 : meanBedHeight();
     const Real height_tolerance = Real(1.0e-3) * config_.particles.r_mean();
     for (std::uint64_t s = 0; s < settle_steps; ++s) {
@@ -181,6 +213,7 @@ SimulationResult Simulation::run(std::ostream& log) {
         if (damping > 0) {
             const Real factor = std::exp(-damping * config_.simulation.dt);
             for (core::Vec3& v : particles_.velocity()) v = v * factor;
+            for (core::Vec3& w : particles_.omega()) w = w * factor;
         }
         used_steps = s + 1;
         if (s + 1 >= config_.settle.min_steps && s % check_every == 0 && !particles_.empty()) {
@@ -195,6 +228,7 @@ SimulationResult Simulation::run(std::ostream& log) {
             }
         }
     }
+    settling_phase_ = false;
     settle_steps_used_ = used_steps;
     settle_converged_ = converged;
     log << " Settling finished in " << used_steps << " steps (t = " << record.time
@@ -207,15 +241,14 @@ SimulationResult Simulation::run(std::ostream& log) {
     // Reference surface = the already settled bed: it is the crater's zero.
     analyzer_.recordReferenceSurface(particles_);
     z_surface_ = analyzer_.referenceHeight();
-    const Real settled_phi = particles_.solidsVolume()
-                             / (config_.domain.x * config_.domain.y
-                                * std::max(analyzer_.referenceHeight(), Real(1e-9)));
+    const Real occupied_h = std::max(analyzer_.referenceHeight() + config_.particles.r_mean(),
+                                     Real(1e-9));
+    const Real settled_phi = particles_.solidsVolumeOf(ParticleKind::Bed)
+                             / (config_.domain.x * config_.domain.y * occupied_h);
     log << " Settled bed: z_ref = " << analyzer_.referenceHeight() << " m, measured phi "
         << settled_phi << "\n";
 
     // ---- PHASE 3: projectile --------------------------------------------------
-    // Safe placement: the projectile cannot be born inside the bed. If the height
-    // in the config leaves no clearance, it is raised and a warning is issued (they never overlap).
     const Real z_surface = z_surface_;
     const Real z_min_allowed = z_surface + config_.projectile.radius + 2 * config_.particles.r_max;
     if (config_.projectile.start_z < z_min_allowed) {
@@ -226,7 +259,6 @@ SimulationResult Simulation::run(std::ostream& log) {
     }
     const auto proj = generation::generateProjectile(particles_, config_, rng);
     impact_energy_ = projectileKineticEnergy(particles_);
-    // Free fall before contact: estimated to warn if t_end falls short.
     const Real gap = config_.projectile.start_z - config_.projectile.radius - z_surface;
     const Real v0 = config_.projectile.speed;
     const Real fall_time = gap > 0 && std::abs(config_.gravity.gz) > 0
@@ -243,19 +275,40 @@ SimulationResult Simulation::run(std::ostream& log) {
     if (vtk_) vtk_->write(particles_, 1, record.time);
 
     // ---- PHASE 4: impact -------------------------------------------------------
+    const Real settle_dissipated_energy = record.dissipated_energy;
     const auto impact_steps = static_cast<std::uint64_t>(
         std::llround(config_.simulation.t_end / config_.simulation.dt));
     log << " Impact: " << impact_steps << " steps...\n";
+
+    const auto subsurface_csv = out_dir / (config_.simulation.name + "_subsurface_chains.csv");
+    const auto radial_csv = out_dir / (config_.simulation.name + "_radial_evolution.csv");
+    bool subsurface_header_written = false;
+    bool radial_header_written = false;
+    const auto field_every = std::max<std::uint64_t>(impact_steps / 8, 1);
 
     std::uint64_t vtk_step = 2;
     const auto progress_every = std::max<std::uint64_t>(impact_steps / 10, 1);
     for (std::uint64_t s = 0; s < impact_steps; ++s) {
         record = step(record, false);
+        record.dissipated_energy = std::max(Real(0), record.dissipated_energy - settle_dissipated_energy);
 
         if (csv_ && (s % config_.simulation.output_every == 0)) {
             record.crater = analyzer_.analyze(particles_, impact_energy_);
+            record.crater.dissipated_energy = record.dissipated_energy;
+            record.crater.active_bonds = record.active_bonds;
+            record.crater.broken_bonds = record.broken_bonds;
             record.has_crater = true;
             csv_->writeRow(record);
+        }
+        if (config_.output.csv && (s % field_every == 0 || s + 1 == impact_steps)) {
+            io::appendSubsurfaceFieldCsv(
+                subsurface_csv, record.time, analyzer_.subsurfaceField(particles_),
+                !subsurface_header_written);
+            subsurface_header_written = true;
+            io::appendRadialProfileCsv(
+                radial_csv, record.time, analyzer_.radialProfile(particles_),
+                !radial_header_written);
+            radial_header_written = true;
         }
         if (vtk_ && vtk_step % config_.output.vtk_every == 0) {
             vtk_->write(particles_, vtk_step, record.time);
@@ -274,6 +327,9 @@ SimulationResult Simulation::run(std::ostream& log) {
     // ---- Final result ----------------------------------------------------------
     SimulationResult result;
     result.crater = analyzer_.analyze(particles_, impact_energy_);
+    result.crater.dissipated_energy = record.dissipated_energy;
+    result.crater.active_bonds = record.active_bonds;
+    result.crater.broken_bonds = record.broken_bonds;
     result.last_step = record;
     result.simulated_time = record.time;
     result.bed_particles = bed.count;
@@ -290,6 +346,12 @@ SimulationResult Simulation::run(std::ostream& log) {
         record.has_crater = true;
         csv_->writeRow(record);
         result.csv_path = csv_->path();
+
+        const auto depth_map_csv = out_dir / (config_.simulation.name + "_depth_map.csv");
+        io::writeDepthMapCsv(depth_map_csv, config_, analyzer_, particles_);
+        result.depth_map_path = depth_map_csv;
+        result.subsurface_path = subsurface_csv;
+        result.radial_evolution_path = radial_csv;
     }
     {
         io::CaseSummary summary;
@@ -322,44 +384,24 @@ SimulationResult Simulation::run(std::ostream& log) {
     log << "    D         = " << result.crater.D * 1000.0 << " mm\n";
     log << "    d_exc     = " << result.crater.d_exc * 1000.0 << " mm\n";
     log << "    h_rim     = " << result.crater.h_rim * 1000.0 << " mm\n";
+    log << "    h_cp      = " << result.crater.h_cp * 1000.0 << " mm\n";
     log << "    epsilon   = " << result.crater.epsilon << "\n";
     log << "    Z/D       = " << result.crater.aspect_zd << "\n";
-    log << "    V_in      = " << result.crater.v_in * 1e6 << " cm3\n";
+    log << "    V_in/V_exc= " << result.crater.v_in_num * 1e6 << " / " << result.crater.v_exc * 1e6 << " cm3\n";
     log << "    Class     = " << result.crater.classification << "\n";
-    log << " Bed = phi " << result.crater.phi_bed << " measured, height "
+    log << " Bed = phi " << result.crater.phi_bed << " (subsurface phi "
+        << result.crater.phi_subsurface << "), height "
         << result.crater.bed_height * 1000.0 << " mm\n";
     log << " v impact  = " << result.impact_speed << " m/s (measured at first contact)\n";
-    log << "    E impact  = " << result.crater.impact_energy << " J | ejecta "
+    log << "    E impact  = " << result.crater.impact_energy << " J | P0 = "
+        << result.crater.impact_pressure_kPa << " kPa | ejecta "
         << result.crater.ejecta_mass * 1000.0 << " g at "
         << result.crater.ejecta_speed_mean << " m/s mean\n";
     log << "    Models    : D_log = " << result.crater.d_log_model * 1000.0
         << " mm | D_uehara = " << result.crater.d_uehara_model * 1000.0
-        << " mm | d_heckel = " << result.crater.d_heckel_model * 1000.0 << " mm\n";
+        << " mm | d_heckel = " << result.crater.d_heckel_model * 1000.0
+        << " mm | h_rim_model = " << result.crater.h_rim_model * 1000.0 << " mm\n";
     return result;
-}
-
-// z bound of the projectile centre of mass (0 if there is no projectile).
-Real projectileComZ(const core::ParticleSystem& particles) {
-    Real mass = 0, mz = 0;
-    for (std::size_t i = 0; i < particles.size(); ++i) {
-        if (particles.kind()[i] != ParticleKind::Projectile) continue;
-        mass += particles.mass()[i];
-        mz += particles.position()[i].z * particles.mass()[i];
-    }
-    return mass > 0 ? mz / mass : 0;
-}
-
-// Velocity of the projectile centre of mass: this is the REAL impact velocity,
-// which may differ from the config one because of the free fall before contact.
-Real projectileComSpeed(const core::ParticleSystem& particles) {
-    Real mass = 0;
-    Vec3 momentum{};
-    for (std::size_t i = 0; i < particles.size(); ++i) {
-        if (particles.kind()[i] != ParticleKind::Projectile) continue;
-        mass += particles.mass()[i];
-        momentum += particles.velocity()[i] * particles.mass()[i];
-    }
-    return mass > 0 ? (momentum / mass).norm() : 0;
 }
 
 }  // namespace granimpact::sim

@@ -6,10 +6,13 @@
 namespace granimpact::core {
 
 void ParticleSystem::reserve(std::size_t n) {
-    position_.reserve(n); velocity_.reserve(n); force_.reserve(n); torque_.reserve(n);
-    radius_.reserve(n); mass_.reserve(n); inv_mass_.reserve(n); inertia_.reserve(n);
+    position_.reserve(n); velocity_.reserve(n); omega_.reserve(n);
+    force_.reserve(n); torque_.reserve(n);
+    radius_.reserve(n); mass_.reserve(n); inv_mass_.reserve(n);
+    inertia_.reserve(n); inv_inertia_.reserve(n);
     kind_.reserve(n); young_.reserve(n); poisson_.reserve(n);
     friction_.reserve(n); restitution_.reserve(n);
+    normal_force_sum_.reserve(n); coordination_.reserve(n);
 }
 
 Index ParticleSystem::add(const Vec3& position, Real radius, Real density, ParticleKind kind) {
@@ -18,33 +21,62 @@ Index ParticleSystem::add(const Vec3& position, Real radius, Real density, Parti
 
     const Real volume = Real(4.0 / 3.0) * kPi * radius * radius * radius;
     const Real mass = density * volume;
-    // Solid sphere: I = 2/5 m r^2. The scalar inertia is stored (enough for
-    // tangential forces without complex rotation at this stage).
+    // Solid sphere: I = 2/5 m r^2.
     const Real inertia = Real(0.4) * mass * radius * radius;
 
     position_.push_back(position);
     velocity_.push_back({});
+    omega_.push_back({});
     force_.push_back({});
     torque_.push_back({});
     radius_.push_back(radius);
     mass_.push_back(mass);
     inv_mass_.push_back(Real(1) / mass);
     inertia_.push_back(inertia);
+    inv_inertia_.push_back(Real(1) / inertia);
     kind_.push_back(kind);
     young_.push_back(0); poisson_.push_back(0); friction_.push_back(0); restitution_.push_back(0);
+    normal_force_sum_.push_back(0);
+    coordination_.push_back(0);
+    if (radius > max_radius_) max_radius_ = radius;
     return static_cast<Index>(size_++);
+}
+
+void ParticleSystem::clear() {
+    position_.clear(); velocity_.clear(); omega_.clear();
+    force_.clear(); torque_.clear();
+    radius_.clear(); mass_.clear(); inv_mass_.clear();
+    inertia_.clear(); inv_inertia_.clear();
+    kind_.clear(); young_.clear(); poisson_.clear();
+    friction_.clear(); restitution_.clear();
+    normal_force_sum_.clear(); coordination_.clear();
+    max_radius_ = 0;
+    size_ = 0;
 }
 
 void ParticleSystem::clearForces() {
     std::fill(force_.begin(), force_.end(), Vec3{});
     std::fill(torque_.begin(), torque_.end(), Vec3{});
+    std::fill(normal_force_sum_.begin(), normal_force_sum_.end(), Real(0));
+    std::fill(coordination_.begin(), coordination_.end(), Index(0));
 }
 
 void ParticleSystem::applyGravity(Real gz) {
     if (gz == 0) return;
     for (std::size_t i = 0; i < size_; ++i) {
-        force_[i].z += mass_[i] * gz;
+        if (inv_mass_[i] > 0) {
+            force_[i].z += mass_[i] * gz;
+        }
     }
+}
+
+void ParticleSystem::scaleMassOf(Index i, Real factor) {
+    if (factor <= 0) return;
+    const auto k = static_cast<std::size_t>(i);
+    mass_[k] *= factor;
+    inertia_[k] *= factor;
+    if (inv_mass_[k] > 0) inv_mass_[k] = Real(1) / mass_[k];
+    if (inv_inertia_[k] > 0) inv_inertia_[k] = Real(1) / inertia_[k];
 }
 
 void ParticleSystem::setMaterial(Real young, Real poisson, Real friction, Real restitution) {
@@ -65,16 +97,16 @@ Real ParticleSystem::kineticEnergy() const {
     return ke;
 }
 
+Real ParticleSystem::rotationalKineticEnergy() const {
+    Real rke = 0;
+    for (std::size_t i = 0; i < size_; ++i) rke += Real(0.5) * inertia_[i] * omega_[i].norm2();
+    return rke;
+}
+
 Real ParticleSystem::gravitationalPotentialEnergy(Real gz) const {
     Real pe = 0;
     for (std::size_t i = 0; i < size_; ++i) pe += mass_[i] * (-gz) * position_[i].z;
     return pe;
-}
-
-Real ParticleSystem::maxRadius() const {
-    Real r = 0;
-    for (std::size_t i = 0; i < size_; ++i) r = std::max(r, radius_[i]);
-    return r;
 }
 
 Real ParticleSystem::totalMass() const {
@@ -91,10 +123,20 @@ Real ParticleSystem::solidsVolume() const {
     return volume;
 }
 
+Real ParticleSystem::solidsVolumeOf(ParticleKind k) const {
+    Real volume = 0;
+    for (std::size_t i = 0; i < size_; ++i) {
+        if (kind_[i] == k) {
+            volume += Real(4.0 / 3.0) * kPi * radius_[i] * radius_[i] * radius_[i];
+        }
+    }
+    return volume;
+}
+
 Real ParticleSystem::maxSpeed() const {
-    Real v = 0;
-    for (std::size_t i = 0; i < size_; ++i) v = std::max(v, velocity_[i].norm());
-    return v;
+    Real v2 = 0;
+    for (std::size_t i = 0; i < size_; ++i) v2 = std::max(v2, velocity_[i].norm2());
+    return std::sqrt(v2);
 }
 
 }  // namespace granimpact::core

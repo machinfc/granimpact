@@ -172,21 +172,59 @@ std::size_t generateProjectile(core::ParticleSystem& particles, const core::SimC
     const auto& pc = config.particles;
     const core::Box box = config.domain.box();
 
-    const Vec3 center{box.min.x + Real(0.5) * box.size().x, box.min.y + Real(0.5) * box.size().y,
-                      pj.start_z};
     const Real theta = pj.angle_deg * kPi / 180.0;
     const Vec3 velocity{pj.speed * std::cos(theta), 0.0, -pj.speed * std::sin(theta)};
 
-    const Real s = Real(2.02) * pc.r_max;
-    const Real dz = Real(0.85) * s;
-    const int steps = static_cast<int>(std::ceil(pj.radius / s)) + 1;
+    // For oblique impacts (angle_deg < 90) when a bed is already present, shift the launch
+    // x-coordinate upstream so the projectile centre strikes near the middle of the bed surface.
+    Real x_launch = box.min.x + Real(0.5) * box.size().x;
+    if (std::abs(velocity.x) > Real(1e-6) && !particles.empty()) {
+        Real z_bed_top = box.min.z;
+        for (std::size_t i = 0; i < particles.size(); ++i) {
+            if (particles.kind()[i] == ParticleKind::Bed) {
+                z_bed_top = std::max(z_bed_top, particles.position()[i].z);
+            }
+        }
+        const Real gap = std::max(Real(0), pj.start_z - pj.radius - z_bed_top);
+        const Real vz0 = std::abs(velocity.z);
+        const Real g_abs = std::abs(config.gravity.gz);
+        const Real t_fall = (g_abs > Real(1e-9))
+                                ? ((std::sqrt(vz0 * vz0 + Real(2.0) * g_abs * gap) - vz0) / g_abs)
+                                : (vz0 > Real(1e-9) ? (gap / vz0) : Real(0));
+        const Real margin_x = pj.radius + Real(2.0) * pc.r_max;
+        x_launch = std::clamp(x_launch - velocity.x * t_fall,
+                              box.min.x + margin_x,
+                              box.max.x - margin_x);
+    }
+    const Vec3 center{x_launch, box.min.y + Real(0.5) * box.size().y, pj.start_z};
+
+    const Real e_r3 = (std::pow(pc.r_max, 4) - std::pow(pc.r_min, 4))
+                      / (4 * std::max(pc.r_max - pc.r_min, Real(1e-18)));
+    const Real v_mean = (pc.r_max > pc.r_min)
+                            ? Real(4.0 / 3.0) * kPi * e_r3
+                            : Real(4.0 / 3.0) * kPi * pc.r_max * pc.r_max * pc.r_max;
+    const Real s_base = Real(2.02) * pc.r_max;
+    const Real dz_base = Real(0.85) * s_base;
+    const Real phi_base = v_mean / (s_base * s_base * dz_base);
+    // Allow projectile.phi to control the internal compaction of the projectile sphere.
+    const Real expansion = (pj.phi > 0 && phi_base > pj.phi)
+                               ? std::cbrt(phi_base / pj.phi)
+                               : Real(1.0);
+    const Real s = s_base * expansion;
+    const Real dz = dz_base * expansion;
+
+    const int steps = static_cast<int>(std::ceil(pj.radius / std::min(s, dz))) + 1;
     const Real jitter = Real(0.08) * s;
     const Real clearance = Real(0.02) * pc.r_mean();
 
-    NeighborHash hash(Real(2.05) * pc.r_max);
+    NeighborHash hash(Real(2.05) * pc.r_max * expansion);
     std::uniform_real_distribution<Real> uni(Real(0), Real(1));
 
-    std::size_t placed = 0;
+    // Intrinsic grain solid density corresponding to bulk density pj.density at packing pj.phi.
+    const Real grain_density = (pj.phi > Real(0.05)) ? (pj.density / pj.phi) : pj.density;
+
+    std::vector<core::Index> placed_indices;
+    Real placed_mass = 0;
     for (int iz = -steps; iz <= steps; ++iz) {
         const Real off = (iz % 2 == 0) ? Real(0) : Real(0.5) * s;
         for (int iy = -steps; iy <= steps; ++iy) {
@@ -204,17 +242,29 @@ std::size_t generateProjectile(core::ParticleSystem& particles, const core::SimC
                 radius = std::min(radius, hash.maxAllowedRadius(position, clearance));
                 if (radius < pc.r_min) continue;
 
-                const auto index = particles.add(position, radius, pj.density,
+                const auto index = particles.add(position, radius, grain_density,
                                                  ParticleKind::Projectile);
                 particles.setMaterialOf(index, pj.young, pj.poisson, pc.friction,
                                         pc.restitution);
                 particles.velocity()[static_cast<std::size_t>(index)] = velocity;
+                placed_mass += particles.mass()[static_cast<std::size_t>(index)];
+                placed_indices.push_back(index);
                 hash.insert(position, radius);
-                ++placed;
             }
         }
     }
-    return placed;
+
+    // Calibrate total projectile mass to match the macroscopic sphere mass
+    // M_target = (4/3) pi R_p^3 * rho_bulk (e.g. 242.51 g in the thesis), compensating
+    // for discrete spherical boundary truncation when R_p / r_max is finite.
+    const Real target_mass = Real(4.0 / 3.0) * kPi * pj.radius * pj.radius * pj.radius * pj.density;
+    if (placed_mass > 0 && target_mass > 0) {
+        const Real mass_scale = target_mass / placed_mass;
+        for (const core::Index idx : placed_indices) {
+            particles.scaleMassOf(idx, mass_scale);
+        }
+    }
+    return placed_indices.size();
 }
 
 }  // namespace granimpact::generation

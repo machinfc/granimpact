@@ -45,9 +45,14 @@ struct ProjectileConfig {
 };
 
 struct ContactConfig {
-    bool tangential{true};       // Mindlin + Coulomb
-    bool rolling_friction{false}; // reserved for the extended stage
-    Real tangential_stiffness_ratio{1.0};
+    bool tangential{true};                // Mindlin-Deresiewicz + Coulomb
+    bool rolling_friction{false};         // Ai et al. (2011) / Luding (2008) rolling resistance
+    Real rolling_friction_coeff{0.15};    // mu_r (dimensionless rolling friction coefficient, ~tan(40-44 deg) calibration)
+    Real tangential_stiffness_ratio{1.0}; // kt / kn scaling
+    bool cohesive_projectile{true};       // Breakable cohesive bonds for weakly consolidated projectile (sigma_y)
+    Real bed_cohesion_kPa{0.0};           // Capillary / moisture or van der Waals cohesion in the bed [kPa] (0 = dry sand)
+    Real magnetic_susceptibility{0.0};    // Dimensionless magnetic susceptibility chi_m for magnetic sand / space regolith
+    Real magnetic_field_T{0.0};           // Vertical ambient magnetic field B_0 [Tesla] for dipole-dipole attraction/repulsion
 };
 
 struct GravityConfig {
@@ -57,6 +62,8 @@ struct GravityConfig {
 struct BoundaryConfig {
     bool periodic_xy{false};
     Real wall_restitution{0.30};
+    Real wall_friction{0.40};   // Coulomb friction against container walls
+    Real wall_damping{0.0};     // Additional non-reflecting acoustic absorption at lateral walls [0,1]
     bool fixed_bottom{true};
 };
 
@@ -65,6 +72,9 @@ struct SettleConfig {
     // 1.0 = normal settling; >1 compacts the bed (reproduces the compacted
     // bed of the thesis without touching the impact physics).
     Real gravity_boost{1.0};
+    // Optional uniaxial compaction pressure [kPa] applied to top layer during
+    // settling (models the 92 kg metallic lid from the thesis, ~4.46 kPa).
+    Real compaction_pressure_kPa{0.0};
     // Kinetic energy per particle below which the bed counts as settled and
     // settling is cut (J per particle).
     Real ke_tolerance{1.0e-8};
@@ -116,6 +126,14 @@ struct SimConfig {
 
     // Validation. Throws std::invalid_argument with an actionable message.
     void validate() const;
+
+    // Returns "compact" for pre-compacted beds (compaction_pressure_kPa > 0 or target phi >= 0.55)
+    // and "loose" otherwise, used to organize outputs into structured subdirectories.
+    [[nodiscard]] std::string bedRegimeFolder() const {
+        return (settle.compaction_pressure_kPa > 0.0 || particles.packing_fraction >= 0.55)
+                   ? "compact"
+                   : "loose";
+    }
 };
 
 }  // namespace granimpact::core

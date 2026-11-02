@@ -156,3 +156,73 @@ TEST(CraterAnalyzer, ClassifiesByAspectRatioZ) {
                            : (obs.aspect_zd > 0.05 ? "Simple" : "Sand Mound");
     EXPECT_EQ(obs.classification, expected);
 }
+
+TEST(CraterModels, UniaxialHeckelModelMatchesPhysRevEPaper) {
+    // At P = 0, phi(0) == phi_0 and depth == 0
+    EXPECT_NEAR(analysis::models::packingHeckelModel(0.524, 0.0), 0.524, 1e-12);
+    EXPECT_NEAR(analysis::models::depthHeckelUniaxialModel(0.11, 0.524, 0.0), 0.0, 1e-12);
+
+    // Loose bed (phi_L = 0.524) vs Compacted bed (phi_C = 0.574) under P_0 = 50 kPa (50000 Pa):
+    // Loose bed must yield a deeper crater than compacted bed.
+    const core::Real z_loose = analysis::models::depthHeckelUniaxialModel(0.11, 0.524, 50000.0);
+    const core::Real z_comp  = analysis::models::depthHeckelUniaxialModel(0.11, 0.574, 50000.0);
+    EXPECT_GT(z_loose, z_comp);
+    EXPECT_GT(z_comp, 0.0);
+
+    // High pressure asymptotically approaches the jamming limit: Z_max = H0 * (1 - phi_0 / phi_m)
+    const core::Real z_sat = analysis::models::depthHeckelUniaxialModel(0.11, 0.524, 1e8);
+    EXPECT_NEAR(z_sat, 0.11 * (1.0 - 0.524 / 0.64), 1e-6);
+}
+
+TEST(CraterModels, RimHeightFollowsDoubleLogLawFromThesis) {
+    // Zero energy -> 0
+    EXPECT_EQ(analysis::models::rimHeightLogLogModel(0.0), 0.0);
+    // Above E0, h_rim grows double-logarithmically and saturates softly
+    const core::Real h10 = analysis::models::rimHeightLogLogModel(10.0);
+    const core::Real h50 = analysis::models::rimHeightLogLogModel(50.0);
+    EXPECT_GT(h10, 0.0);
+    EXPECT_GT(h50, h10);
+}
+
+TEST(CraterAnalyzer, ExtractsRadialProfileAndSubsurfaceField) {
+    const auto cfg = syntheticConfig();
+    const auto flat = bedWithDepression(cfg, 0.05, 0.0, 0.02, 0.02);
+    const auto deformed = bedWithDepression(cfg, 0.05, 0.015, 0.02, 0.02);
+
+    analysis::CraterAnalyzer analyzer(cfg, 64);
+    analyzer.recordReferenceSurface(flat);
+
+    const auto profile = analyzer.radialProfile(deformed, 16);
+    ASSERT_EQ(profile.size(), 16u);
+    // Center of crater (bin 0) has negative z_bed_mm relative to z_ref
+    EXPECT_LT(profile[0].z_bed_mm, -5.0);
+
+    const auto sub = analyzer.subsurfaceField(deformed, 8, 6);
+    ASSERT_EQ(sub.size(), 48u);
+    bool has_particles = false;
+    for (const auto& cell : sub) {
+        if (cell.phi_local > 0.0) has_particles = true;
+    }
+    EXPECT_TRUE(has_particles);
+}
+
+TEST(CraterAnalyzer, DetectsCentralPeakFromProjectileRemnants) {
+    const auto cfg = syntheticConfig();
+    auto ps = bedWithDepression(cfg, 0.05, 0.015, 0.025, 0.025);
+    // Add a cluster of Projectile remnants at the center forming a porous piston / central peak
+    for (int ix = -2; ix <= 2; ++ix) {
+        for (int iy = -2; iy <= 2; ++iy) {
+            ps.add({0.10 + ix * 0.002, 0.10 + iy * 0.002, 0.045},
+                   cfg.particles.r_min, 1500.0, core::ParticleKind::Projectile);
+        }
+    }
+
+    analysis::CraterAnalyzer analyzer(cfg, 64);
+    const auto flat = bedWithDepression(cfg, 0.05, 0.0, 0.025, 0.025);
+    analyzer.recordReferenceSurface(flat);
+    const auto obs = analyzer.analyze(ps, 10.0);
+
+    EXPECT_GT(obs.h_cp, 0.005);
+    EXPECT_GT(obs.v_cp, 0.0);
+}
+

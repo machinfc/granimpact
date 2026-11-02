@@ -29,6 +29,9 @@ struct SimulationResult {
     core::Real settled_phi{0};         // density after settling
     std::filesystem::path csv_path;
     std::filesystem::path summary_path;
+    std::filesystem::path depth_map_path;
+    std::filesystem::path subsurface_path;
+    std::filesystem::path radial_evolution_path;
     std::filesystem::path vtk_collection;
 };
 
@@ -60,6 +63,7 @@ private:
     core::Real impact_energy_{0};
     core::Real impact_speed_{0};
     bool first_contact_seen_{false};
+    bool settling_phase_{false};
     core::Real z_surface_{0};
     std::uint64_t settle_steps_used_{0};
     bool settle_converged_{false};

@@ -23,11 +23,13 @@ Real CellList::suggestCellSize(Real max_radius, Real safety) {
     return 2.0 * max_radius * safety;
 }
 
-void CellList::build(const core::ParticleSystem& particles, const core::Box& box, Real cell_size) {
+void CellList::build(const core::ParticleSystem& particles, const core::Box& box, Real cell_size,
+                     bool periodic_xy) {
     if (cell_size <= 0) throw std::invalid_argument("CellList: cell_size must be > 0");
 
     const core::Vec3 size = box.max - box.min;
     origin_ = box.min;
+    periodic_xy_ = periodic_xy;
     inv_cell_ = {1.0 / cell_size, 1.0 / cell_size, 1.0 / cell_size};
     dims_ = {std::max(1, static_cast<int>(std::floor(size.x / cell_size))),
              std::max(1, static_cast<int>(std::floor(size.y / cell_size))),
@@ -37,15 +39,16 @@ void CellList::build(const core::ParticleSystem& particles, const core::Box& box
     ordered_.resize(n);
     counts_.assign(cellCount() + 1, 0);
 
-    // 1) count per cell
-    std::vector<std::uint32_t> cell_of(n);
+    // 1) count per cell (reusing cell_of_ to avoid per-step heap allocations)
+    cell_of_.resize(n);
+    const auto& pos = particles.position();
     for (std::size_t i = 0; i < n; ++i) {
-        const core::Vec3 p = particles.position()[i];
+        const core::Vec3 p = pos[i];
         const int cx = std::clamp(static_cast<int>((p.x - origin_.x) * inv_cell_.x), 0, dims_[0] - 1);
         const int cy = std::clamp(static_cast<int>((p.y - origin_.y) * inv_cell_.y), 0, dims_[1] - 1);
         const int cz = std::clamp(static_cast<int>((p.z - origin_.z) * inv_cell_.z), 0, dims_[2] - 1);
         const std::uint32_t c = index(cx, cy, cz);
-        cell_of[i] = c;
+        cell_of_[i] = c;
         ++counts_[c + 1];
     }
 
@@ -53,10 +56,10 @@ void CellList::build(const core::ParticleSystem& particles, const core::Box& box
     for (std::size_t c = 1; c < counts_.size(); ++c) counts_[c] += counts_[c - 1];
     cell_start_.assign(counts_.begin(), counts_.end());
 
-    // 3) place each particle in its cell
-    std::vector<std::uint32_t> cursor(cell_start_.begin(), cell_start_.end() - 1);
+    // 3) place each particle in its cell (reusing cursor_ buffer)
+    cursor_.assign(cell_start_.begin(), cell_start_.end() - 1);
     for (std::size_t i = 0; i < n; ++i) {
-        ordered_[cursor[cell_of[i]]++] = static_cast<core::Index>(i);
+        ordered_[cursor_[cell_of_[i]]++] = static_cast<core::Index>(i);
     }
 }
 

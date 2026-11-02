@@ -18,6 +18,10 @@ struct StepRecord {
     std::size_t contacts{0};
     core::Real kinetic_energy{0};
     core::Real potential_energy{0};
+    core::Real rotational_energy{0};
+    core::Real dissipated_energy{0};
+    std::size_t active_bonds{0};
+    std::size_t broken_bonds{0};
     core::Real max_speed{0};
     bool has_crater{false};
     analysis::CraterObservables crater{};
@@ -75,5 +79,22 @@ private:
 
 void writeCaseSummary(const std::filesystem::path& path, const core::SimConfig& config,
                       const analysis::CraterObservables& crater, const CaseSummary& summary);
+
+// Writes 2D depth map CSV (x_mm, y_mm, z_bed_mm, z_total_mm) for craterslab .npz export
+// and 2D topographic visualization.
+void writeDepthMapCsv(const std::filesystem::path& path, const core::SimConfig& config,
+                      const analysis::CraterAnalyzer& analyzer,
+                      const core::ParticleSystem& particles);
+
+// Appends a snapshot of the 2D cylindrical (r, z) subsurface packing and force-chain
+// virial stress field to `<name>_subsurface_chains.csv`.
+void appendSubsurfaceFieldCsv(const std::filesystem::path& path, core::Real time,
+                              const std::vector<analysis::SubsurfaceCell>& field,
+                              bool write_header);
+
+// Appends an azimuthally averaged radial profile z(r, t) to `<name>_radial_evolution.csv`.
+void appendRadialProfileCsv(const std::filesystem::path& path, core::Real time,
+                            const std::vector<analysis::RadialProfileBin>& bins,
+                            bool write_header);
 
 }  // namespace granimpact::io

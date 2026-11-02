@@ -210,3 +210,152 @@ TEST(ContactModel, CellListFindsAllContacts) {
     }
     EXPECT_EQ(stats.touching, brute);
 }
+
+TEST(ContactModel, RollingResistanceProducesOpposingTorque) {
+    auto ps = overlappingPair(1e-6);
+    core::SimConfig cfg;
+    cfg.particles.r_min = 1e-3;
+    cfg.particles.r_max = 1e-3;
+    cfg.particles.young = 70e9;
+    cfg.particles.poisson = 0.3;
+    cfg.particles.friction = 0.4;
+    cfg.particles.restitution = 0.5;
+    cfg.contact.tangential = false;
+    cfg.contact.rolling_friction = true;
+    cfg.contact.rolling_friction_coeff = 0.15;
+
+    // Spin particle 0 in +y so rolling velocity omega_i - omega_j != 0
+    ps.omega()[0] = {0.0, 10.0, 0.0};
+    ps.omega()[1] = {0.0, 0.0, 0.0};
+
+    physics::ContactModel model(cfg);
+    physics::CellList cells;
+    cells.build(ps, cfg.domain.box(), physics::CellList::suggestCellSize(1e-3));
+    model.computeForces(ps, cells, 1e-7);
+
+    // Rolling resistance torque on particle 0 must oppose its +y rotation, and be equal/opposite on 1
+    EXPECT_LT(ps.torque()[0].y, 0.0);
+    EXPECT_GT(ps.torque()[1].y, 0.0);
+    EXPECT_NEAR(ps.torque()[0].y + ps.torque()[1].y, 0.0, 1e-18);
+}
+
+TEST(ContactModel, CohesiveProjectileBondsResistTensionAndBreakAtYield) {
+    core::SimConfig cfg;
+    cfg.domain = {0.02, 0.02, 0.02};
+    cfg.particles.r_min = 1e-3;
+    cfg.particles.r_max = 1e-3;
+    cfg.particles.young = 1e7;
+    cfg.particles.poisson = 0.25;
+    cfg.particles.friction = 0.5;
+    cfg.particles.restitution = 0.3;
+    cfg.projectile.yield_kPa = 17.15;
+    cfg.contact.cohesive_projectile = true;
+
+    core::ParticleSystem ps;
+    const core::Real r = 1e-3;
+    // Two projectile grains initially touching at distance 2r
+    ps.add({0.01, 0.01, 0.01}, r, 1500.0, core::ParticleKind::Projectile);
+    ps.add({0.01, 0.01, 0.01 + 2.0 * r}, r, 1500.0, core::ParticleKind::Projectile);
+    ps.setMaterial(1e7, 0.25, 0.5, 0.3);
+
+    physics::ContactModel model(cfg);
+    model.registerCohesiveBonds(ps);
+    EXPECT_EQ(model.activeBonds(), 1u);
+
+    // Small separation within tensile strength -> attractive force pulls them back together
+    ps.position()[1].z = 0.01 + 2.0 * r + 1e-7;
+    ps.clearForces();
+    physics::CellList cells;
+    cells.build(ps, cfg.domain.box(), physics::CellList::suggestCellSize(r) * 1.2);
+    model.computeForces(ps, cells, 1e-6);
+    EXPECT_GT(ps.force()[0].z, 0.0);   // pulled upwards toward particle 1
+    EXPECT_LT(ps.force()[1].z, 0.0);   // pulled downwards toward particle 0
+    EXPECT_EQ(model.activeBonds(), 1u);
+
+    // Large separation beyond fracture threshold -> bond breaks
+    ps.position()[1].z = 0.01 + 2.0 * r + 1e-4;
+    ps.clearForces();
+    cells.build(ps, cfg.domain.box(), physics::CellList::suggestCellSize(r) * 1.2);
+    model.computeForces(ps, cells, 1e-6);
+    EXPECT_EQ(model.activeBonds(), 0u);
+    EXPECT_EQ(model.brokenBonds(), 1u);
+}
+
+TEST(ContactModel, PeriodicBoundaryWrapsContactsAcrossBoxEdges) {
+    core::SimConfig cfg;
+    cfg.domain = {0.02, 0.02, 0.02};
+    cfg.boundaries.periodic_xy = true;
+    const core::Real r = 1e-3;
+    cfg.particles.r_min = r;
+    cfg.particles.r_max = r;
+
+    core::ParticleSystem ps;
+    // One particle near x = 0.0005, one near x = 0.0195 -> wrapped distance is 0.001 < 2r = 0.002
+    ps.add({0.0005, 0.01, 0.01}, r, 2650.0, core::ParticleKind::Bed);
+    ps.add({0.0195, 0.01, 0.01}, r, 2650.0, core::ParticleKind::Bed);
+    ps.setMaterial(1e7, 0.25, 0.5, 0.3);
+
+    physics::ContactModel model(cfg);
+    physics::CellList cells;
+    cells.build(ps, cfg.domain.box(), physics::CellList::suggestCellSize(r), /*periodic_xy=*/true);
+    const auto stats = model.computeForces(ps, cells, 1e-6);
+
+    EXPECT_EQ(stats.touching, 1u);
+    EXPECT_GT(ps.force()[0].x, 0.0);   // pushed into +x (away from x=0 edge)
+    EXPECT_LT(ps.force()[1].x, 0.0);   // pushed into -x (away from x=Lx edge)
+}
+
+TEST(ContactModel, BedCohesionProducesCapillaryAttractionAndShearStrength) {
+    auto ps = overlappingPair(1e-9);
+    core::SimConfig cfg;
+    cfg.particles.r_min = 1e-3;
+    cfg.particles.r_max = 1e-3;
+    cfg.particles.young = 1e7;
+    cfg.particles.poisson = 0.25;
+    cfg.particles.friction = 0.4;
+    cfg.particles.restitution = 0.5;
+    cfg.contact.bed_cohesion_kPa = 5.0;   // 5 kPa capillary/moisture cohesion
+    ps.setMaterial(1e7, 0.25, 0.4, 0.5);
+
+    physics::ContactModel model(cfg);
+    physics::CellList cells;
+    cells.build(ps, cfg.domain.box(), physics::CellList::suggestCellSize(1e-3));
+    model.computeForces(ps, cells, 1e-6);
+
+    // At tiny overlap (1e-9 m), capillary cohesion dominates Hertz repulsion and pulls grains together
+    EXPECT_GT(ps.force()[0].z, 0.0);
+    EXPECT_LT(ps.force()[1].z, 0.0);
+}
+
+TEST(ContactModel, MagneticDipolesAttractVerticallyAndRepelHorizontally) {
+    core::SimConfig cfg;
+    cfg.domain = {0.02, 0.02, 0.02};
+    cfg.particles.r_min = 1e-3;
+    cfg.particles.r_max = 1e-3;
+    cfg.contact.magnetic_susceptibility = 1.5;
+    cfg.contact.magnetic_field_T = 0.05;
+
+    // 1) Vertically aligned pair (head-to-tail along B_z) -> attractive
+    core::ParticleSystem ps_vert;
+    ps_vert.add({0.01, 0.01, 0.008}, 1e-3, 2650.0, core::ParticleKind::Bed);
+    ps_vert.add({0.01, 0.01, 0.0101}, 1e-3, 2650.0, core::ParticleKind::Bed);
+    ps_vert.setMaterial(1e7, 0.25, 0.4, 0.5);
+
+    physics::ContactModel model(cfg);
+    physics::CellList cells;
+    cells.build(ps_vert, cfg.domain.box(), physics::CellList::suggestCellSize(1e-3) * 1.2);
+    model.computeForces(ps_vert, cells, 1e-6);
+    EXPECT_GT(ps_vert.force()[0].z, 0.0);   // lower grain pulled up toward upper grain
+    EXPECT_LT(ps_vert.force()[1].z, 0.0);   // upper grain pulled down toward lower grain
+
+    // 2) Horizontally aligned pair (side-by-side perpendicular to B_z) -> repulsive
+    core::ParticleSystem ps_horiz;
+    ps_horiz.add({0.008, 0.01, 0.01}, 1e-3, 2650.0, core::ParticleKind::Bed);
+    ps_horiz.add({0.0101, 0.01, 0.01}, 1e-3, 2650.0, core::ParticleKind::Bed);
+    ps_horiz.setMaterial(1e7, 0.25, 0.4, 0.5);
+    cells.build(ps_horiz, cfg.domain.box(), physics::CellList::suggestCellSize(1e-3) * 1.2);
+    model.computeForces(ps_horiz, cells, 1e-6);
+    EXPECT_LT(ps_horiz.force()[0].x, 0.0);  // left grain pushed -x
+    EXPECT_GT(ps_horiz.force()[1].x, 0.0);  // right grain pushed +x
+}
+

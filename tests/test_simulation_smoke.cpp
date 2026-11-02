@@ -247,4 +247,8 @@ TEST(SimConfig, JsonRoundTrips) {
     EXPECT_NEAR(again.particles.packing_fraction, cfg.particles.packing_fraction, 1e-15);
     EXPECT_EQ(again.boundaries.periodic_xy, cfg.boundaries.periodic_xy);
     EXPECT_NEAR(again.settle.gravity_boost, cfg.settle.gravity_boost, 1e-15);
+    EXPECT_EQ(cfg.bedRegimeFolder(), "loose");
+
+    cfg.settle.compaction_pressure_kPa = 4.46;
+    EXPECT_EQ(cfg.bedRegimeFolder(), "compact");
 }
